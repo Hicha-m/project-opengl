@@ -63,6 +63,16 @@ const glm::vec3& Camera::getPosition() const
 	return mPosition;
 }
 
+float Camera::getYaw() const
+{
+	return glm::degrees(mYaw);
+}
+
+float Camera::getPitch() const
+{
+	return glm::degrees(mPitch);
+}
+
 //-----------------------------------------------------------------------------
 // FPSCamera - Constructor
 //-----------------------------------------------------------------------------
@@ -71,6 +81,7 @@ FPSCamera::FPSCamera(glm::vec3 position, float yaw, float pitch)
 	mPosition = position;
 	mYaw = yaw;
 	mPitch = pitch;
+	updateCameraVectors();
 }
 
 //-----------------------------------------------------------------------------
@@ -97,6 +108,12 @@ void FPSCamera::rotate(float yaw, float pitch)
 {
 	mYaw += glm::radians(yaw);
 	mPitch += glm::radians(pitch);
+
+	// Keep yaw bounded while allowing unlimited horizontal rotation.
+	if (mYaw > glm::pi<float>())
+		mYaw -= glm::two_pi<float>();
+	else if (mYaw < -glm::pi<float>())
+		mYaw += glm::two_pi<float>();
 
 	// Constrain the pitch
 	mPitch = glm::clamp(mPitch, -glm::pi<float>() / 2.0f + 0.1f, glm::pi<float>() / 2.0f - 0.1f);

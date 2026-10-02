@@ -19,8 +19,12 @@ public:
 	void unbind(GLuint texUnit = 0);
 
 private:
-	Texture2D(const Texture2D& rhs) {}
-	Texture2D& operator = (const Texture2D& rhs) {}
+ 	// supprime la copie (ressource OpenGL unique)
+	Texture2D(const Texture2D&)            = delete;
+	Texture2D& operator=(const Texture2D&) = delete;
+	// move autorisé
+	Texture2D(Texture2D&&) noexcept;
+	Texture2D& operator=(Texture2D&&) noexcept;
 
 	GLuint mTexture;
 };
