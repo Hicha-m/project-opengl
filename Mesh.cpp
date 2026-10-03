@@ -20,14 +20,14 @@ std::vector<std::string> split(std::string s, std::string t)
 	std::vector<std::string> res;
 	while(1)
 	{
-		int pos = s.find(t);
+		size_t pos = s.find(t);
 		if(pos == -1)
 		{
 			res.push_back(s); 
 			break;
 		}
 		res.push_back(s.substr(0, pos));
-		s = s.substr(pos+1, s.size() - pos - 1);
+		s = s.substr(pos + t.length());;
 	}
 	return res;
 }
@@ -37,17 +37,16 @@ std::vector<std::string> split(std::string s, std::string t)
 // Constructor
 //-----------------------------------------------------------------------------
 Mesh::Mesh()
-	:mLoaded(false)
+    : mLoaded(false), mVBO(0), mVAO(0)
 {
 }
-
 //-----------------------------------------------------------------------------
 // Destructor
 //-----------------------------------------------------------------------------
 Mesh::~Mesh()
 {
-	glDeleteVertexArrays(1, &mVAO);
-	glDeleteBuffers(1, &mVBO);
+if (mVAO != 0) glDeleteVertexArrays(1, &mVAO);
+if (mVBO != 0) glDeleteBuffers(1, &mVBO);
 }
 
 //-----------------------------------------------------------------------------
@@ -89,11 +88,8 @@ bool Mesh::loadOBJ(const std::string& filename)
 
 			if (cmd == "v")
 			{
-				glm::vec3 vertex;
-				int dim = 0;
-				while (dim < 3 && ss >> vertex[dim])
-					dim++;
-
+				glm::vec3 vertex(0.0f);
+				ss >> vertex.x >> vertex.y >> vertex.z;
 				tempVertices.push_back(vertex);
 			}
 			else if (cmd == "vt")
@@ -123,6 +119,8 @@ bool Mesh::loadOBJ(const std::string& filename)
 				{
 					std::vector<std::string> data = split(faceData, "/");
 
+					if (data.size() < 1) continue;
+
 					if (data[0].size() > 0)
 					{
 						sscanf(data[0].c_str(), "%d", &vertexIndex);
@@ -138,6 +136,10 @@ bool Mesh::loadOBJ(const std::string& filename)
 							sscanf(data[1].c_str(), "%d", &uvIndex);
 							uvIndices.push_back(uvIndex);
 						}
+						else
+						{
+							uvIndices.push_back(0); // keep the indices aligned, even if this vertex has no texture coordinate
+						}
 					}
 					
 					if (data.size() >= 2)
@@ -147,6 +149,10 @@ bool Mesh::loadOBJ(const std::string& filename)
 						{
 							sscanf(data[2].c_str(), "%d", &normalIndex);
 							normalIndices.push_back(normalIndex);
+						}
+						else
+						{
+							normalIndices.push_back(0);
 						}
 					}
 				}
@@ -160,7 +166,7 @@ bool Mesh::loadOBJ(const std::string& filename)
 		// For each vertex of each triangle
 		for (unsigned int i = 0; i < vertexIndices.size(); i++)
 		{
-			Vertex meshVertex;
+			Vertex meshVertex{};
 
 			// Get the attributes using the indices
 
@@ -182,6 +188,7 @@ bool Mesh::loadOBJ(const std::string& filename)
 				meshVertex.texCoords = uv;
 			}
 
+			meshVertex.tangent = glm::vec3(0.0f);
 			mVertices.push_back(meshVertex);
 		}
 
@@ -201,6 +208,12 @@ bool Mesh::loadOBJ(const std::string& filename)
 //-----------------------------------------------------------------------------
 void Mesh::initBuffers()
 {
+
+	if (mVAO != 0) glDeleteVertexArrays(1, &mVAO);
+	if (mVBO != 0) glDeleteBuffers(1, &mVBO);
+
+
+	// idem pour normal, texCoords, tangent
 	glGenVertexArrays(1, &mVAO);
 	glGenBuffers(1, &mVBO);
 
@@ -219,10 +232,33 @@ void Mesh::initBuffers()
 	// Vertex Texture Coords
 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(6 * sizeof(GLfloat)));
 	glEnableVertexAttribArray(2);
+
+	// Vertex Tangent
+	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(8 * sizeof(GLfloat)));
+	glEnableVertexAttribArray(3);
 	
 	// unbind to make sure other code does not change it somewhere else
 	glBindVertexArray(0);
 }
+
+void Mesh::setVertices(
+    const std::vector<Vertex>& vertices
+)
+{
+    mVertices = vertices;
+
+    if (mVertices.empty())
+    {
+        mLoaded = false;
+        return;
+    }
+
+
+    initBuffers();
+
+    mLoaded = true;
+}
+
 
 //-----------------------------------------------------------------------------
 // Render the mesh

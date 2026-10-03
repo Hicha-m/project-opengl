@@ -18,6 +18,10 @@
 #include "Mesh.h"
 
 #include "Sphere.h"
+#include "scene/Transform.h"
+#include "scene/SceneObject.h"
+#include "scene/Scene.h"
+#include "graphics/Renderer.h"
 
 
 // Global Variables
@@ -28,6 +32,7 @@ GLFWwindow* gWindow = NULL;
 bool gWireframe = false;
 bool gFlashlightOn = true;
 bool gCameraDebug = false;
+bool fullscreen = true;
 glm::vec4 gClearColor(0.06f, 0.06f, 0.07f, 1.0f);
 
 FPSCamera fpsCamera(glm::vec3(0.0f, 3.5f, 10.0f), glm::radians(110.0f), glm::radians(55.0f));
@@ -69,10 +74,6 @@ int main()
 	ShaderProgram starShader;
 	starShader.loadShaders("shaders/stars.vert","shaders/stars.frag");
 
-	Sphere earth(1.0f, 32, 32);
-	Sphere sun(5.0f, 32, 32);
-	Sphere stars(100.0f, 32, 32);
-
 
 	Texture2D earthDayTexture, earthNightTexture, earthSpecularTexture,earthNormalTexture ,earthCloudsTexture;
 	earthDayTexture.loadTexture("textures/earth/2k_earth_daymap.jpg", true);
@@ -80,17 +81,75 @@ int main()
 	earthCloudsTexture.loadTexture("textures/earth/2k_earth_clouds.jpg",true);
 	earthSpecularTexture.loadTexture("textures/earth/2k_earth_specular_map.png", true);
 	earthNormalTexture.loadTexture("textures/earth/2k_earth_normal_map.png", true);
+	
 	Texture2D sunTexture;
 	sunTexture.loadTexture("textures/sun/2k_sun.jpg", true);
 
 	Texture2D starTexture;
 	starTexture.loadTexture("textures/space/2k_stars.jpg", true);
 
-	glm::vec3 earthPos(30.0f, 50.0f, 0.0f);
-	glm::vec3 sunLightPos(100.0f, 200.0f, 0.0f);
-	glm::vec3 sunToEarth = glm::normalize(earthPos - sunLightPos);
 
-	glm::vec3 starPos(0.0f, 0.0f, 0.0f);
+	Sphere earth(1.0f,32,32);
+	Mesh* earthMesh = &earth.getMesh();
+		
+	Sphere sun(1.0f, 32, 32);
+	Mesh* sunMesh = &sun.getMesh();
+
+	Sphere stars(1.0f, 32, 32);
+	Mesh* starMesh = &stars.getMesh();
+
+	Scene scene;
+	Renderer renderer;
+	LightManager lightManager;
+
+	SceneObject earthObject("Earth",earthMesh,&earthShader);
+	earthObject.transform.position = glm::vec3(30.0f, 50.0f, 0.0f);
+	earthObject.transform.scale = glm::vec3(10.0f);
+	earthObject.material.addTexture("dayMap",&earthDayTexture,0);
+	earthObject.material.addTexture("nightMap",&earthNightTexture,1);
+	earthObject.material.addTexture("specularMap",&earthSpecularTexture,2);
+	earthObject.material.addTexture("normalMap",&earthNormalTexture,3);
+	earthObject.material.receivesLighting = true;
+	scene.addObject(earthObject);
+
+
+	SceneObject cloudObject("EarthClouds",earthMesh,&cloudShader);
+	cloudObject.transform.position = glm::vec3(30.0f, 50.0f, 0.0f);
+	cloudObject.transform.scale = glm::vec3(10.1f);
+	cloudObject.material.addTexture("cloudMap",&earthCloudsTexture,0);
+	cloudObject.material.blending = true;
+	cloudObject.material.receivesLighting = true;
+	scene.addObject(cloudObject);
+
+
+	SceneObject sunObject("Sun",sunMesh,&sunShader);
+
+	sunObject.transform.position = glm::vec3(100.0f, 200.0f, 0.0f);
+	sunObject.transform.scale = glm::vec3(50.0f);
+	sunObject.material.addTexture("sunMap",&sunTexture,0);
+	sunObject.material.receivesLighting = false;
+	scene.addObject(sunObject);
+
+
+
+	SceneObject starObject("Stars",starMesh,&starShader);
+
+	starObject.transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	starObject.transform.scale = glm::vec3(500.0f);
+	starObject.material.addTexture("starMap",&starTexture,0);
+	starObject.material.depthLEqual = true;
+	starObject.material.depthWrite = false;
+	scene.addObject(starObject);
+
+	DirectionalLight sunLight;
+
+	sunLight.direction = glm::normalize(earthObject.transform.position - sunObject.transform.position);
+	sunLight.color = glm::vec3(1.0f,0.95f,0.8f);
+	sunLight.intensity =1.0f;
+
+
+	// Set the directional light
+	lightManager.setDirectionalLight(sunLight);
 
 
 	float earthRotation = 0.0f;
@@ -108,7 +167,7 @@ int main()
 		double deltaTime = currentTime - lastTime;
 
 
-		earthRotation += deltaTime * 0.1 * 200;
+		earthRotation += deltaTime  * 100;
 		cloudRotation += deltaTime * 0.05f * 100;
 
 		// Poll for and process events
@@ -127,107 +186,46 @@ int main()
 		projection = glm::perspective(glm::radians(fpsCamera.getFOV()), (float)gWindowWidth / (float)gWindowHeight, 0.1f, MAX_DISTANCE);
 
 		// update the view (camera) position
-		glm::vec3 viewPos;
-		viewPos.x = fpsCamera.getPosition().x;
-		viewPos.y = fpsCamera.getPosition().y;
-		viewPos.z = fpsCamera.getPosition().z;
+		glm::vec3 viewPos = fpsCamera.getPosition();
 
 
-		// Must be called BEFORE setting uniforms because setting uniforms is done
-		// on the currently active shader program.
-		sunShader.use();
-		model = glm::translate(glm::mat4(1.0), sunLightPos) * glm::scale(glm::mat4(1.0), glm::vec3(10.0f));
-		sunShader.setUniform("model", model); 
-		sunShader.setUniform("view", view);
-		sunShader.setUniform("projection", projection);
 
-		// sun
-		sunTexture.bind(0);	
-		sun.draw();
-		sunTexture.unbind(0);
+		// --------------------------------------------------------
+        // UPDATE OBJECT TRANSFORMS
+        // --------------------------------------------------------
 
-		// ============================================================
-		// EARTH
-		// ============================================================
+        SceneObject* earth = scene.findObject("Earth");
+        if (earth)
+        {
+            earth->transform.rotation = glm::vec3(0.0f,glm::radians(earthRotation),0.0f);
+        }
+        SceneObject* clouds = scene.findObject("EarthClouds");
+        if (clouds)
+        {
+            clouds->transform.rotation = glm::vec3(0.0f,glm::radians(cloudRotation),0.0f);
+        }
 
-		earthShader.use();
-		model = glm::translate(glm::mat4(1.0), earthPos) * glm::scale(glm::mat4(1.0), glm::vec3(10.0f));
-		model = glm::rotate(model, glm::radians(earthRotation), glm::vec3(0.0f, 1.0f, 0.0f));
-		earthShader.setUniform("model", model);
-		earthShader.setUniform("view", view);
-		earthShader.setUniform("projection", projection);
-		earthShader.setUniform("viewPos",viewPos);
-		earthShader.setUniform("sunDirection",sunToEarth);
 
-		earthDayTexture.bind(0);
-		earthNightTexture.bind(1);
-		earthSpecularTexture.bind(2);
-		earthNormalTexture.bind(3);
+        // --------------------------------------------------------
+        // STARS FOLLOW CAMERA
+        // --------------------------------------------------------
 
-		earthShader.setUniformSampler("dayMap", 0);
-		earthShader.setUniformSampler("nightMap", 1);
-		earthShader.setUniformSampler("specularMap",2);
-		earthShader.setUniformSampler("normalMap", 3);
+        SceneObject* starsObject = scene.findObject("Stars");
+        if (starsObject)
+        {
+            starsObject->transform.position = viewPos;
+        }
+
+		// render
 		
-
-		earth.draw();
-
-		earthNormalTexture.unbind(3);
-		earthSpecularTexture.unbind(2);
-		earthNightTexture.unbind(1);
-		earthDayTexture.unbind(0);
-
-	// ============================================================
-	// CLOUDS
-	// ============================================================
-
-		glEnable(GL_BLEND);
-
-		glBlendFunc(
-			GL_SRC_ALPHA,
-			GL_ONE_MINUS_SRC_ALPHA
+		renderer.render(
+			scene,
+			lightManager,
+			view,
+			projection,
+			viewPos
 		);
 
-		model = glm::translate(glm::mat4(1.0), earthPos) * glm::scale(glm::mat4(1.0), glm::vec3(10.1f));
-		model = glm::rotate(model, glm::radians(cloudRotation), glm::vec3(0.0f, 1.0f, 0.0f));
-
-
-		cloudShader.use();
-
-		cloudShader.setUniform("model", model);
-		cloudShader.setUniform("view", view);
-		cloudShader.setUniform("projection", projection);
-		cloudShader.setUniform(
-			"sunDirection",
-			earthPos - sunLightPos
-		);
-		earthCloudsTexture.bind(0);
-
-
-		cloudShader.setUniformSampler("cloudMap", 0);
-
-		earth.draw();
-
-		earthCloudsTexture.unbind(0);
-
-		glDisable(GL_BLEND);
-
-		// ============================================================
-		// STARS
-		// ============================================================
-
-		glDepthFunc(GL_LEQUAL);
-		starShader.use();
-		starPos = viewPos; // follow the camera position
-		model = glm::translate(glm::mat4(1.0), starPos);
-		starShader.setUniform("model", model);
-		starShader.setUniform("view", view);
-		starShader.setUniform("projection", projection);
-		
-		
-		starTexture.bind(0);
-		stars.draw();
-		starTexture.unbind(0);
 
 		// Swap front and back buffers
 		glfwSwapBuffers(gWindow);
@@ -259,10 +257,19 @@ bool initOpenGL()
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);	// forward compatible with newer versions of OpenGL as they become available but not backward compatible (it will not run on devices that do not support OpenGL 3.3
+    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
+	
+	if (fullscreen) {
+        GLFWmonitor* pMonitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode* pVmode = glfwGetVideoMode(pMonitor);
+        if (pVmode != NULL){
+            gWindow = glfwCreateWindow(pVmode->width, pVmode->height, APP_TITLE, pMonitor, NULL);
+        }
+    } else {
+        gWindow = glfwCreateWindow(gWindowWidth, gWindowHeight, APP_TITLE, NULL, NULL);
+    }
 
-	// Create an OpenGL 3.3 core, forward compatible context window
-	gWindow = glfwCreateWindow(gWindowWidth, gWindowHeight, APP_TITLE, NULL, NULL);
 	if (gWindow == NULL)
 	{
 		std::cerr << "Failed to create GLFW window" << std::endl;

@@ -1,6 +1,3 @@
-//-----------------------------------------------------------------------------
-// Basic Mesh class
-//-----------------------------------------------------------------------------
 #ifndef MESH_H
 #define MESH_H
 
@@ -8,7 +5,7 @@
 #include <string>
 
 #define GLEW_STATIC
-#include "GL/glew.h"	// Important - this header must come before glfw3 header
+#include "GL/glew.h"
 #include "glm/glm.hpp"
 
 
@@ -17,6 +14,7 @@ struct Vertex
 	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec2 texCoords;
+    glm::vec3 tangent;
 };
 
 class Mesh
@@ -29,6 +27,11 @@ public:
 	bool loadOBJ(const std::string& filename);
 	void draw();
 
+	// Permet à Sphere de construire directement un Mesh
+    void setVertices(
+        const std::vector<Vertex>& vertices
+    );
+
 private:
 
 	void initBuffers();
@@ -37,4 +40,5 @@ private:
 	std::vector<Vertex> mVertices;
 	GLuint mVBO, mVAO;
 };
-#endif //MESH_H
+
+#endif // MESH_H
