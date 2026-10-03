@@ -34,6 +34,7 @@ FPSCamera fpsCamera(glm::vec3(0.0f, 3.5f, 10.0f), glm::radians(110.0f), glm::rad
 const double ZOOM_SENSITIVITY = -3.0;
 float MOVE_SPEED = 5.0; // units per second
 const float MOUSE_SENSITIVITY = 0.1f;
+const float MAX_DISTANCE = 100000000.0f;
 
 
 // Function prototypes
@@ -65,8 +66,12 @@ int main()
 	ShaderProgram cloudShader;
 	cloudShader.loadShaders("shaders/clouds.vert","shaders/clouds.frag");
 
+	ShaderProgram starShader;
+	starShader.loadShaders("shaders/stars.vert","shaders/stars.frag");
+
 	Sphere earth(1.0f, 32, 32);
 	Sphere sun(5.0f, 32, 32);
+	Sphere stars(100.0f, 32, 32);
 
 
 	Texture2D earthDayTexture, earthNightTexture, earthSpecularTexture,earthNormalTexture ,earthCloudsTexture;
@@ -78,9 +83,14 @@ int main()
 	Texture2D sunTexture;
 	sunTexture.loadTexture("textures/sun/2k_sun.jpg", true);
 
+	Texture2D starTexture;
+	starTexture.loadTexture("textures/space/2k_stars.jpg", true);
+
 	glm::vec3 earthPos(30.0f, 50.0f, 0.0f);
 	glm::vec3 sunLightPos(100.0f, 200.0f, 0.0f);
 	glm::vec3 sunToEarth = glm::normalize(earthPos - sunLightPos);
+
+	glm::vec3 starPos(0.0f, 0.0f, 0.0f);
 
 
 	float earthRotation = 0.0f;
@@ -114,7 +124,7 @@ int main()
 		view = fpsCamera.getViewMatrix();
 
 		// Create the projection matrix
-		projection = glm::perspective(glm::radians(fpsCamera.getFOV()), (float)gWindowWidth / (float)gWindowHeight, 0.1f, 1000.0f);
+		projection = glm::perspective(glm::radians(fpsCamera.getFOV()), (float)gWindowWidth / (float)gWindowHeight, 0.1f, MAX_DISTANCE);
 
 		// update the view (camera) position
 		glm::vec3 viewPos;
@@ -201,7 +211,24 @@ int main()
 		earthCloudsTexture.unbind(0);
 
 		glDisable(GL_BLEND);
-	
+
+		// ============================================================
+		// STARS
+		// ============================================================
+
+		glDepthFunc(GL_LEQUAL);
+		starShader.use();
+		starPos = viewPos; // follow the camera position
+		model = glm::translate(glm::mat4(1.0), starPos);
+		starShader.setUniform("model", model);
+		starShader.setUniform("view", view);
+		starShader.setUniform("projection", projection);
+		
+		
+		starTexture.bind(0);
+		stars.draw();
+		starTexture.unbind(0);
+
 		// Swap front and back buffers
 		glfwSwapBuffers(gWindow);
 
