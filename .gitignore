@@ -1,0 +1,8 @@
+project
+.DS_Store
+.idea/
+.vscode/
+*copy*
+
+# Generated objects, dependency files and test binaries
+/build/

@@ -60,7 +60,9 @@ bool Application::init()
 bool Application::initOpenGL()
 {
     if (mOptions.width <= 0 || mOptions.height <= 0) return false;
+#if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
     glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif
     if (!glfwInit())
     {
         std::cerr << "GLFW initialization failed\n";

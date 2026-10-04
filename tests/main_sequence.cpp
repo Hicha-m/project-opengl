@@ -131,7 +131,11 @@ int main()
             }
             if(flightTimeline.getTime()>=60) {
                 const auto nose=glm::normalize(glm::vec3(ship->transform.getMatrix()*glm::vec4(0,0,-1,0)));
-                assert(glm::dot(nose,flightCamera.getPosition()-ship->transform.position)>11);
+                // The authored camera orbits by up to 18 degrees with a
+                // lateral offset of at most 5 units. It stays ahead of the nose.
+                const float angle=glm::radians(18.0f);
+                const float minForward=12*std::cos(angle)-5*std::sin(angle);
+                assert(glm::dot(nose,flightCamera.getPosition()-ship->transform.position)>minForward-0.02f);
                 assert(glm::distance(flightCamera.getPosition(),ship->transform.position)<15);
             }
         }

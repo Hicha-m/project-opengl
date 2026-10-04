@@ -53,8 +53,8 @@ playback, volume, mute and impact sounds.
 
 ## Requirements
 
-- Linux with an X11 display
-- C++17 compiler and GNU Make
+- Linux with an X11 display, or macOS (CMake build)
+- C++17 compiler and CMake 3.20+ (or GNU Make)
 - OpenGL 3.3+
 - GLFW 3, GLEW, GLM and SDL3 development packages
 - FFmpeg
@@ -63,6 +63,56 @@ The project expects the libraries to be discoverable through `pkg-config`:
 `glfw3`, `glew` and `sdl3`.
 
 ## Build and run
+
+### CMake (recommended)
+
+Install OpenGL, GLFW, GLEW, GLM, SDL3 and FFmpeg first. On Fedora:
+
+```bash
+sudo dnf install gcc-c++ cmake make glfw-devel glew-devel glm-devel SDL3-devel ffmpeg
+```
+
+On macOS:
+
+```bash
+brew install cmake glfw glew glm sdl3 ffmpeg
+```
+
+Ubuntu 24.04 requires SDL3 to be built from source; the Dockerfile and GitHub
+workflow handle this automatically.
+
+Run from the project directory:
+
+```bash
+cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build/cmake --parallel 2
+ctest --test-dir build/cmake --output-on-failure
+cmake --build build/cmake --target run
+```
+
+The executable and assets are staged under `build/cmake/runtime/`, including
+converted audio under `build/cmake/runtime/build/music/`. You can also run
+`cd build/cmake/runtime && ./project`. To enable the graphical integration test:
+
+```bash
+cmake -S . -B build/cmake -DENABLE_RUNTIME_TESTS=ON
+cmake --build build/cmake --parallel 2
+ctest --test-dir build/cmake -L runtime --output-on-failure
+```
+
+On a Linux server with `xvfb` and `xauth` installed, use:
+
+```bash
+LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure
+```
+
+Assertions remain enabled in the test executables even for Release builds.
+To install the executable and assets into another directory, run
+`cmake --install build/cmake --prefix /path/to/installation` after building,
+then launch `./project` from that installation directory. Shared libraries
+must also be installed on the destination machine.
+
+### GNU Make
 
 Run these commands from the project directory:
 
@@ -77,6 +127,61 @@ make clean        # Remove build files and generated executables
 `make test-runtime` needs a working X11 display even though the test window is
 hidden. The build generates converted audio files in `build/music/`; the
 original MP3 files remain unchanged.
+
+## Docker
+
+Build a Linux image from the project directory:
+
+```bash
+docker build -t project-opengl .
+```
+
+The multi-stage build compiles SDL3 3.2.10 and the application, runs all CPU,
+audio and OpenGL tests under Xvfb, then keeps only the application, assets and
+runtime libraries in the final image.
+
+To open the application on a Linux X11 desktop (including XWayland), pass the
+display socket and your X11 authorization file:
+
+```bash
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -e DISPLAY \
+  -e XAUTHORITY=/tmp/container.xauth \
+  -e LIBGL_ALWAYS_SOFTWARE=1 \
+  -e SDL_AUDIO_DRIVER=dummy \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+  -v "${XAUTHORITY:-$HOME/.Xauthority}:/tmp/container.xauth:ro" \
+  project-opengl
+```
+
+The Xauthority file must exist and authorize the current display. This command
+uses software rendering and silent audio; desktop audio/GPU forwarding depends
+on the host configuration. The native CMake build provides normal desktop audio.
+The container desktop launch is intended for Linux hosts.
+
+## GitHub Actions (CI/CD)
+
+The workflow is `.github/workflows/cmake-multi-platform.yml` (the directory name
+is **workflows**, plural). It runs on pushes, pull requests and manual triggers:
+
+- CMake builds in Debug and Release on Linux and macOS using Clang, plus GCC
+  Release on Linux.
+- The 13 CPU/audio tests run on both systems; the OpenGL test runs on Linux
+  using Xvfb and Mesa software rendering.
+- After every build job succeeds, Docker builds the image and repeats the tests
+  in the Ubuntu container.
+- A push to the repository's default branch also publishes
+  `ghcr.io/hicha-m/project-opengl:latest` and a `sha-<commit>` tag. Other pushes
+  and pull requests build without publishing.
+
+Commit and push these files to GitHub to activate the workflow. Publication uses
+GitHub's built-in `GITHUB_TOKEN` with `packages: write`; no Docker Hub account or
+personal registry token is required. If organization settings restrict that
+permission, allow package publishing for the workflow in the repository settings.
+Check the **Actions** tab for builds and the repository's **Packages** area for
+the image. This delivery step publishes a container image; it does not deploy a
+running application to a server.
 
 ## Controls
 
