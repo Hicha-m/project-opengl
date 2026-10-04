@@ -36,6 +36,7 @@ bool Application::init()
     mResources = std::make_unique<SceneResources>();
     if (!SceneSetup::build(mScene, mLightManager, *mResources)
         || !mMeteorSystem.initGraphics()
+        || !mParticleSystem.initGraphics()
         || !MainSequence::build(mTimeline, mCinematicCamera, mScene, mMeteorShower))
     {
         std::cerr << "Scene initialization failed\n";
@@ -126,6 +127,9 @@ void Application::update(float deltaTime)
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
     mMeteorSystem.update(deltaTime, SceneSetup::earthCollider(mScene, *mResources));
+    // Advance existing particles before births, so every burst is visible at age zero.
+    mParticleSystem.update(deltaTime);
+    mImpactParticleEmitter.consume(mMeteorSystem.impacts());
     mImpactLightSystem.consume(mMeteorSystem.impacts());
     mImpactLightSystem.update(deltaTime);
     mImpactLightSystem.publish(mLightManager);
@@ -172,6 +176,7 @@ void Application::render()
     SceneSetup::update(mScene, position);
     mRenderer.render(mScene, mLightManager, view, projection, position);
     mMeteorSystem.render(mRenderer, mLightManager, view, projection, position);
+    mParticleSystem.render(view, projection);
 }
 
 void Application::showFPS(double currentTime)
@@ -240,6 +245,8 @@ void Application::restartSequence()
     if (!mInitialized) return;
     MainSequence::reset(mTimeline, mMeteorShower, mMeteorSystem);
     mImpactLightSystem.clear();
+    mParticleSystem.clear();
+    mImpactParticleEmitter.reset();
     mImpactLightSystem.publish(mLightManager);
     mTimeline.play();
     mDebugTimer = 0;
@@ -259,7 +266,10 @@ void Application::shutdown()
     mMeteorShower.reset();
     mMeteorSystem.clear();
     mImpactLightSystem.clear();
+    mParticleSystem.clear();
+    mImpactParticleEmitter.reset();
     mMeteorSystem.releaseGraphics();
+    mParticleSystem.releaseGraphics();
     mScene.objects.clear();
     mResources.reset(); // GPU destructors require the current context.
     mLightManager = LightManager{};

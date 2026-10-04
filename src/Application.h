@@ -10,6 +10,7 @@
 #include "systems/MeteorSystem.h"
 #include "systems/MeteorShower.h"
 #include "systems/ImpactLightSystem.h"
+#include "systems/ImpactParticleEmitter.h"
 
 struct GLFWwindow;
 
@@ -34,6 +35,7 @@ public:
     void shutdown();
     void restartSequence();
     MeteorSystem& meteors() { return mMeteorSystem; }
+    ParticleSystem& particles() { return mParticleSystem; }
     const ImpactLightSystem& impactLights() const { return mImpactLightSystem; }
 
 private:
@@ -69,5 +71,7 @@ private:
     Timeline mTimeline;
     MeteorSystem mMeteorSystem;
     ImpactLightSystem mImpactLightSystem;
+    ParticleSystem mParticleSystem;
+    ImpactParticleEmitter mImpactParticleEmitter{mParticleSystem};
     MeteorShower mMeteorShower{mMeteorSystem};
 };

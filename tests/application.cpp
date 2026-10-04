@@ -164,6 +164,58 @@ static void checkShower(MeteorSystem& system)
     assert(system.size() == 0 && pixels() == empty);
 }
 
+static void checkParticles(ParticleSystem& system)
+{
+    assert(system.graphicsReady() && system.initGraphics());
+    system.clear();
+    ParticleEmitter emitter(system);
+    ParticleBurstConfig config;
+    config.seed = 42;
+    config.minLifetime = config.maxLifetime = 2;
+    const auto view = glm::lookAt(glm::vec3(0,0,20), glm::vec3(0), glm::vec3(0,1,0));
+    const auto projection = glm::ortho(-5.0f,5.0f,-3.75f,3.75f,0.1f,100.0f);
+    auto draw = [&]() {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        system.render(view, projection);
+    };
+    draw(); const auto empty = pixels();
+    for (std::size_t count : {100,1000,10000}) {
+        config.count = count; assert(emitter.configure(config));
+        assert(emitter.burst({0,0,0}, {0,1,0}));
+        draw(); const auto birth = pixels(); assert(birth != empty);
+        system.update(0.4f);
+        // A primitives query verifies the complete population reaches one batch.
+        GLuint query; glGenQueries(1, &query);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glBeginQuery(GL_PRIMITIVES_GENERATED, query);
+        system.render(view, projection);
+        glEndQuery(GL_PRIMITIVES_GENERATED);
+        GLuint primitives = 0; glGetQueryObjectuiv(query, GL_QUERY_RESULT, &primitives);
+        glDeleteQueries(1, &query);
+        assert(primitives == count * 2);
+        const auto moved = pixels(); assert(moved != birth);
+        auto path = "/tmp/particles-" + std::to_string(count) + ".ppm";
+        capture(path.c_str(),640,480);
+        system.clear(); emitter.reset(); emitter.burst({0,0,0}, {0,1,0}); system.update(0.4f);
+        draw(); assert(pixels() == moved);
+        system.update(2); draw(); assert(system.size() == 0 && pixels() == empty);
+    }
+    // Depth occlusion and restoration of caller state.
+    config.count = 100; assert(emitter.configure(config)); emitter.burst({0,0,0},{0,1,0});
+    glClearDepth(0); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); glClearDepth(1);
+    glDisable(GL_DEPTH_TEST); glEnable(GL_BLEND); glDepthMask(GL_FALSE);
+    glBlendFunc(GL_ONE, GL_ZERO);
+    system.render(view, projection);
+    assert(pixels() == empty);
+    GLboolean mask; glGetBooleanv(GL_DEPTH_WRITEMASK, &mask);
+    GLint source; glGetIntegerv(GL_BLEND_SRC_RGB, &source);
+    assert(!glIsEnabled(GL_DEPTH_TEST) && glIsEnabled(GL_BLEND) && !mask && source == GL_ONE);
+    glEnable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDepthMask(GL_TRUE);
+    system.clear(); system.releaseGraphics(); system.releaseGraphics();
+    assert(!system.graphicsReady()); draw(); assert(pixels() == empty);
+    assert(system.initGraphics());
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -179,6 +231,7 @@ int main()
     assert(glGetError() == GL_NO_ERROR);
     checkMeteors(app.meteors());
     checkShower(app.meteors());
+    checkParticles(app.particles());
     Transform meteor;
     meteor.position = {30, 50, 15};
     meteor.scale = glm::vec3(0.5f);
@@ -192,10 +245,12 @@ int main()
     assert(app.meteors().spawn(touching, {0, 0, -10}, 5));
     app.run(1);
     assert(app.impactLights().lights().size() == 1);
+    assert(app.particles().size() == 48 && app.particles().particles()[0].age == 0);
     assert(app.impactLights().lights()[0].intensity == app.impactLights().lights()[0].initialIntensity);
     app.restartSequence();
     assert(app.meteors().size() == 0);
     assert(app.impactLights().lights().empty());
+    assert(app.particles().size() == 0);
     app.run(3);
     assert(app.meteors().size() == 0);
     {
@@ -226,6 +281,9 @@ int main()
         earth->transform.scale = glm::vec3(10);
         MeteorSystem meteors;
         ImpactLightSystem flashes;
+        ParticleSystem particles;
+        ImpactParticleEmitter particleEmitter(particles);
+        assert(particles.initGraphics());
         MeteorShower shower(meteors);
         assert(meteors.initGraphics());
         assert(MainSequence::build(timeline, camera, scene, shower));
@@ -236,10 +294,12 @@ int main()
         std::vector<std::vector<unsigned char>> firstPass;
         std::vector<std::vector<MeteorImpact>> firstImpacts;
         std::vector<std::vector<ImpactLight>> firstLights;
+        std::vector<std::vector<Particle>> firstParticles;
         for (int pass = 0; pass < 2; ++pass)
         {
             MainSequence::reset(timeline, shower, meteors);
             flashes.clear();
+            particles.clear(); particleEmitter.reset();
             flashes.publish(lights);
             timeline.play();
             int imageIndex = 0;
@@ -250,6 +310,8 @@ int main()
                 {
                     timeline.update(0.25f);
                     meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
+                    particles.update(0.25f);
+                    particleEmitter.consume(meteors.impacts());
                     flashes.consume(meteors.impacts());
                     flashes.update(0.25f);
                     flashes.publish(lights);
@@ -274,6 +336,15 @@ int main()
                         const auto& b = firstImpacts[frame][i];
                         assert(a.position == b.position && a.normal == b.normal);
                         assert(a.velocity == b.velocity && a.meteorScale == b.meteorScale);
+                    }
+                }
+                if (pass == 0) firstParticles.push_back(particles.particles());
+                else {
+                    assert(particles.size() == firstParticles[frame].size());
+                    for (std::size_t i = 0; i < particles.size(); ++i) {
+                        const auto& a = particles.particles()[i]; const auto& b = firstParticles[frame][i];
+                        assert(a.position == b.position && a.velocity == b.velocity);
+                        assert(a.size == b.size && a.age == b.age && a.lifetime == b.lifetime);
                     }
                 }
                 if (pass == 0) firstLights.push_back(flashes.lights());
@@ -307,12 +378,14 @@ int main()
                 const auto rendered = pixels();
                 if (meteors.size() > 0) assert(rendered != withoutMeteors);
                 else assert(rendered == withoutMeteors);
+                particles.render(view, projection);
+                const auto withParticles = pixels();
                 if (pass == 0)
                 {
                     capture(images[imageIndex], 640, 480);
-                    firstPass.push_back(rendered);
+                    firstPass.push_back(withParticles);
                 }
-                else assert(rendered == firstPass[imageIndex]); // Actual image replay.
+                else assert(withParticles == firstPass[imageIndex]); // Actual image replay.
                 ++imageIndex;
             }
             assert(imageIndex == 6 && !timeline.isPlaying() && timeline.getTime() == 30);
@@ -380,6 +453,16 @@ int main()
         assert(flashes.lights().empty() && pixels() == baseline);
         capture("/tmp/impact-flash-expired.ppm", 640, 480);
 
+        particles.clear(); particleEmitter.reset(); particleEmitter.consume(meteors.impacts());
+        assert(particles.size() == 48);
+        drawContact(); const auto withoutParticles = pixels();
+        particles.render(view, projection); assert(pixels() != withoutParticles);
+        capture("/tmp/impact-particles-birth.ppm", 640, 480);
+        particles.update(0.4f); drawContact(); particles.render(view, projection);
+        capture("/tmp/impact-particles-moved.ppm", 640, 480);
+        particles.update(2); drawContact(); particles.render(view, projection);
+        assert(particles.size() == 0 && pixels() == baseline);
+
         // Query the actual shader uniform after an overflowing impact burst.
         std::vector<MeteorImpact> burst(80, {{30, 50, 10}, {0, 0, 1}, {0, 0, -10}, 0.5f});
         flashes.consume(burst);
@@ -399,6 +482,7 @@ int main()
     app.shutdown();
     assert(app.meteors().size() == 0 && !app.meteors().graphicsReady());
     assert(app.impactLights().lights().empty());
+    assert(app.particles().size() == 0);
     assert(glfwGetCurrentContext() == nullptr);
     assert(app.init());
     assert(app.meteors().size() == 0 && app.meteors().graphicsReady());
@@ -427,9 +511,15 @@ int main()
     assert(!app.init());
     assert(glfwGetCurrentContext() == nullptr);
     assert(!app.meteors().graphicsReady() && app.meteors().size() == 0);
+    // All earlier resources loaded, particle shader absent: release partial init.
+    std::filesystem::create_symlink(original / "shaders/meteor.frag", empty / "shaders/meteor.frag");
+    std::filesystem::remove(empty / "shaders/particle.frag");
+    assert(!app.init());
+    assert(glfwGetCurrentContext() == nullptr);
+    assert(!app.particles().graphicsReady() && !app.meteors().graphicsReady());
     std::filesystem::current_path(original);
     std::filesystem::remove_all(empty);
     assert(app.init());
     app.run(3);
-    std::cout << "Application lifecycle, continuous impacts and cinematic image replay checks passed\n";
+    std::cout << "Application lifecycle, impacts, instanced particles and cinematic image replay checks passed\n";
 } // Application destructor also releases resources before GLFW.

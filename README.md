@@ -16,7 +16,8 @@ projet/
 │   │   ├── Mesh.h / Mesh.cpp
 │   │   ├── ShaderProgram.h / ShaderProgram.cpp
 │   │   ├── Texture2D.h / Texture2D.cpp
-│   │   └── Renderer.h / Renderer.cpp
+│   │   ├── Renderer.h / Renderer.cpp
+│   │   └── ParticleRenderer.h / ParticleRenderer.cpp
 │   ├── geometry/
 │   │   ├── Sphere.h / Sphere.cpp
 │   │   └── SphereCollider.h
@@ -43,7 +44,11 @@ projet/
 │   │   ├── MeteorResources.h / MeteorResources.cpp
 │   │   ├── ImpactLight.h
 │   │   ├── ImpactLightSystem.h / ImpactLightSystem.cpp
-│   │   └── MeteorShower.h / MeteorShower.cpp
+│   │   ├── MeteorShower.h / MeteorShower.cpp
+│   │   ├── Particle.h
+│   │   ├── ParticleSystem.h / ParticleSystem.cpp
+│   │   ├── ParticleEmitter.h / ParticleEmitter.cpp
+│   │   └── ImpactParticleEmitter.h / ImpactParticleEmitter.cpp
 │   └── cinematic/
 │       └── MainSequence.h / MainSequence.cpp
 ├── shaders/                  # programmes GLSL exécutés par le GPU
@@ -54,6 +59,7 @@ projet/
 │   ├── meteor_system.cpp
 │   ├── meteor_shower.cpp
 │   ├── meteor_collision.cpp
+│   ├── particle_system.cpp
 │   ├── impact_light.cpp
 │   └── application.cpp
 ├── build/                    # objets, dépendances et tests compilés, ignorés par Git
@@ -100,6 +106,12 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `systems/MeteorImpact.h` | Contact sur la cible, normale, vitesse et taille ; aucune logique d’effet. |
 | `systems/ImpactLight.h` | Position, couleur, intensités, âge, durée et état de naissance d'un flash. |
 | `systems/ImpactLightSystem` | Consomme les impacts sans connaître la Terre ni MeteorSystem. Crée les flashes, les fait décroître et publie les lumières temporaires au LightManager. |
+| `systems/Particle.h` | Données runtime : position, vitesse, taille monde, âge et durée de vie. |
+| `systems/ParticleSystem` | Stocke, déplace et expire les particules sur CPU ; délègue le rendu sans dépendre des météores ou de SceneObject. |
+| `systems/ParticleEmitter` | Burst générique dans un cône : nombre, vitesse, taille, lifetime et seed configurables ; RNG réinitialisable. |
+| `systems/ImpactParticleEmitter` | Consomme les MeteorImpact et demande un burst à l'émetteur générique suivant la normale extérieure. |
+| `graphics/ParticleRenderer` | Un buffer d'instances et un draw call de billboards orientés caméra pour toute la population ; restaure les états OpenGL. |
+| `tests/particle_system.cpp` | Vérifie simulation, expiration, cône, impacts simultanés, plages, seed et reset jusqu'à 10 000 particules. |
 | `tests/impact_light.cpp` | Vérifie la première frame, la décroissance, l'expiration, les impacts simultanés, la sélection GPU et la relecture. |
 | `tests/meteor_collision.cpp` | Vérifie les contacts continus, le tunneling, les lifetimes et les impacts multiples. |
 | `systems/MeteorShower` | Générateur CPU indépendant : boîte de spawn, direction avec dispersion conique, cadence par seconde, plages de paramètres et seed reproductible. |
@@ -107,7 +119,7 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `tests/meteor_system.cpp` | Vérifie sans OpenGL le mouvement indépendant, les expirations, les entrées invalides, clear et 1 000 instances. |
 | `tests/timeline.cpp` | Vérifie les pistes, la pause, la reprise, la fin, les événements et la relecture. |
 | `tests/main_sequence.cpp` | Vérifie les paramètres de la séquence complète et les bindings après ajout d'objets. |
-| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL, les flashes sur la Terre, la limite GPU, la relecture des lumières et des images, le reset et la récupération après ressources absentes. Exporte les captures dans `/tmp`. |
+| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL, les flashes sur la Terre, la limite GPU, la relecture des lumières et des images, les particules instanciées jusqu’à 10 000, l’occlusion, le reset et la récupération après ressources absentes. Exporte les captures dans `/tmp`. |
 | `Makefile` | Compile et lie l'application et les tests, suit les dépendances entre headers et sources, lance l'application ou nettoie les fichiers générés. |
 | `.gitignore` | Exclut notamment l'exécutable et le dossier de compilation `build/` du suivi Git. |
 
@@ -122,6 +134,7 @@ qui calcule la couleur des fragments :
 - `clouds.vert` / `clouds.frag` : couche de nuages avec transparence et éclairage.
 - `sun.vert` / `sun.frag` : surface lumineuse du Soleil.
 - `stars.vert` / `stars.frag` : fond étoilé.
+- `particle.vert` / `particle.frag` : billboards instanciés lumineux avec disparition progressive.
 - `meteor.vert` / `meteor.frag` : roche texturée avec éclairage directionnel et ambiant.
 
 `textures/earth/` contient les cartes jour, nuit, nuages, normales et spéculaire ;
@@ -132,10 +145,10 @@ qui calcule la couleur des fragments :
 `Application` demande à `SceneSetup` de construire le monde et à `MainSequence`
 de configurer le film. À chaque frame, elle traite les entrées, avance `Timeline`
 (qui met à jour la caméra et les transformations), avance aussi la simulation de
-`MeteorSystem`, consomme ses impacts avec `ImpactLightSystem`, met à jour et publie
-les flashes, puis avance la génération de `MeteorShower`, et demande à `Renderer`
-de dessiner `Scene` et à `MeteorSystem` de dessiner sa population avec les mêmes
-lumières et matrices de caméra.
+`MeteorSystem`, avance les particules existantes puis consomme les impacts avec
+`ImpactParticleEmitter` et `ImpactLightSystem`. Elle met à jour et publie les
+flashes, avance la génération de `MeteorShower`, puis dessine la scène, les
+météores et les particules avec les mêmes matrices de caméra.
 
 Chaque flash est placé à `impact.position + normal * 0.2` en coordonnées monde.
 Son intensité initiale vaut `clamp(speed * meteorScale * 3, 2, 30)`, sa couleur
@@ -149,9 +162,31 @@ l'éclairage au voisinage du contact. Au-delà de 32 lumières, seules les plus
 intenses sont envoyées au GPU ; les autres continuent de vieillir sur le CPU.
 
 `R` vide aussi les flashes et leur publication dans `LightManager`. Les lumières
-permanentes restent présentes. Il n'y a à cette phase ni particules, ni bloom,
-ni cratère. Captures du test de contact : `/tmp/impact-flash-peak.ppm`,
+permanentes restent présentes. `R` vide les particules et réinitialise aussi
+le RNG de leur émetteur. Il n'y a à cette phase ni bloom, ni cratère. Captures du test de contact : `/tmp/impact-flash-peak.ppm`,
 `/tmp/impact-flash-faded.ppm` et `/tmp/impact-flash-expired.ppm`.
+
+Chaque impact émet 48 fragments orangés à `impact.position + normal * 0.12`.
+Le cône de 1,3 radian reste dans l'hémisphère extérieur ; les vitesses vont de
+0,8 à 3 unités/s, les diamètres de 0,06 à 0,16 unité et les lifetimes de 0,6 à
+1,4 seconde. La seed par défaut est 46. `ParticleBurstConfig` permet de changer
+ces plages pour d'autres usages ; `ImpactParticleEmitter::configure` expose
+aussi la seed et impose un cône contenu dans l'hémisphère extérieur. Le système
+de particules ne connaît pas les impacts. Les particules naissent après la simulation de la frame, à l'âge zéro.
+
+Le rendu construit un buffer compact position/taille/opacité puis appelle une
+seule fois `glDrawArraysInstanced` (deux triangles par billboard). Le shader
+travaille en espace caméra, sans texture. La transparence additive évite le tri,
+le test de profondeur conserve l'occlusion par la Terre et les particules
+n'écrivent pas dans le depth buffer. L'opacité décroît avec l'âge. Il n'y a pas
+de collision, gravité, fumée, feu ou traînée dans cette phase.
+
+Les tests CPU et OpenGL couvrent 100, 1 000 et 10 000 particules, le mouvement,
+l'expiration, l'occlusion, le reset et le replay des données et des images.
+Captures : `/tmp/particles-100.ppm`, `/tmp/particles-1000.ppm`,
+`/tmp/particles-10000.ppm`, `/tmp/impact-particles-birth.ppm` et
+`/tmp/impact-particles-moved.ppm`. Ces tests valident le fonctionnement à ces
+populations, sans constituer un benchmark FPS.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
@@ -194,7 +229,7 @@ Depuis `projet` (les chemins de shaders et textures sont relatifs à ce dossier)
 make                  # compile l'application, sans la lancer
 make project          # même compilation
 make run              # compile si nécessaire, puis lance l'application
-make test             # tests Timeline, séquence, météores et flashes, sans fenêtre
+make test             # tests Timeline, séquence, météores, flashes et particules, sans fenêtre
 make test-sequence    # seulement le test de séquence
 make test-runtime     # test OpenGL masqué, nécessite un affichage X11
 make clean            # supprime build/ et l'exécutable project
