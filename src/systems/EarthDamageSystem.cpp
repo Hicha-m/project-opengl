@@ -47,6 +47,12 @@ void EarthDamageSystem::consume(const std::vector<MeteorImpact>& impacts, const 
         glm::vec2 uv;
         if (!std::isfinite(impact.meteorScale) || impact.meteorScale <= 0
             || !worldToUV(impact.position, earth, uv)) continue;
+        if (finite(impact.velocity)) {
+            const auto velocity = glm::dvec3(impact.velocity);
+            const double scale = impact.meteorScale;
+            const double energy = scale * scale * scale * glm::dot(velocity, velocity);
+            mDestructionLevel = std::min(1.0, mDestructionLevel + energy / DestructionEnergyBudget);
+        }
         const auto center = direction(uv);
         const double radius = std::clamp(std::atan2(2.0 * impact.meteorScale, worldRadius), 0.025, 0.25);
         const float edge = float(std::cos(radius));
@@ -83,6 +89,7 @@ void EarthDamageSystem::update(float dt)
 }
 void EarthDamageSystem::clear()
 {
+    mDestructionLevel = 0;
     std::fill(mPixels.begin(), mPixels.end(), 0);
     std::fill(mHeat.begin(), mHeat.end(), 0);
     mHeatDirty = true;

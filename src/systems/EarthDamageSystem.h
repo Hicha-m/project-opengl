@@ -15,6 +15,10 @@ public:
     void consume(const std::vector<MeteorImpact>& impacts, const Transform& earth, float localRadius = 1.0f);
     void update(float deltaTime); // Cool existing heat before consuming new impacts.
     void clear();
+    // Kinetic-energy proxy: scale cubed (mass) times speed squared.
+    // Cinematic normalization, not a geological energy model.
+    static constexpr double DestructionEnergyBudget = 1000.0;
+    float destructionLevel() const { return float(mDestructionLevel); }
     const std::vector<float>& pixels() const { return mPixels; }
     const std::vector<float>& heatPixels() const { return mHeat; }
     bool heatDirty() const { return mHeatDirty; }
@@ -26,6 +30,7 @@ public:
     bool uploadHeat(Texture2D& texture);
     bool upload(Texture2D& damage, Texture2D& heat);
 private:
+    double mDestructionLevel = 0; // Accumulated in double, clamped to [0,1].
     std::vector<float> mPixels;
     std::vector<float> mHeat;
     bool mHeatDirty = true;

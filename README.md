@@ -61,6 +61,7 @@ projet/
 │   ├── meteor_system.cpp
 │   ├── meteor_shower.cpp
 │   ├── meteor_collision.cpp
+│   ├── destruction_level.cpp
 │   ├── earth_damage.cpp
 │   ├── meteor_trail.cpp
 │   ├── particle_system.cpp
@@ -113,6 +114,7 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `systems/MeteorTrailEmitter` | Observe les météores en lecture seule, échantillonne leurs segments par distance et émet dans ParticleSystem ; état et RNG par MeteorId. |
 | `tests/meteor_trail.cpp` | Vérifie densité à 30/60/144 FPS, grandes frames, vieillissement dans la frame, suppressions, réallocations et replay. |
 | `systems/EarthDamageSystem` | Consomme les impacts, transforme leurs positions monde en UV locales et accumule les dégâts permanents et la chaleur temporaire dans deux cartes CPU. Refroidit la chaleur et envoie les cartes modifiées aux textures terrestres. |
+| `tests/destruction_level.cpp` | Vérifie les contributions de petits/gros impacts, vitesse, accumulation, bornes, entrées invalides, indépendance du refroidissement et replay du niveau global. |
 | `tests/earth_damage.cpp` | Vérifie UV, rotation, accumulation, saturation, couture, pôles, refroidissement et replay sans contexte OpenGL. |
 | `systems/Particle.h` | Données runtime : position, vitesse, taille monde, âge et durée de vie. |
 | `systems/ParticleSystem` | Stocke, déplace et expire les particules sur CPU ; délègue le rendu sans dépendre des météores ou de SceneObject. |
@@ -272,10 +274,40 @@ le replay des deux cartes et des images de la cinématique.
 Captures : `/tmp/earth-heat-night-peak.ppm`, `/tmp/earth-heat-night-cooled.ppm`,
 `/tmp/earth-heat-night-reheated.ppm` et `/tmp/earth-heat-cold-burn.ppm`.
 
-Les étapes suivantes restent successives : 4.8.3 ajoutera le niveau de
-destruction global, 4.8.4 les fissures émissives et 4.8.5 la rupture avec
-fragments préparés, noyau blanc, éclairage du noyau et bloom. Elles ne sont
-pas implémentées par la phase 4.8.2.
+Les étapes suivantes restent successives : 4.8.4 ajoutera les fissures émissives
+et 4.8.5 la rupture avec fragments préparés, noyau blanc, éclairage du noyau
+et bloom.
+
+## Niveau de destruction global — phase 4.8.3
+
+`EarthDamageSystem::destructionLevel()` expose un état normalisé entre 0 et 1,
+initialement nul, cumulatif et monotone jusqu'au reset. Chaque impact accepté
+par le mapping et doté d'une vitesse finie contribue selon une approximation
+simple d'énergie : `meteorScale³ * dot(velocity, velocity) / 1000`.
+Le cube de la taille représente une masse relative ; le carré de la vitesse
+représente l'énergie relative. Doubler la taille multiplie la contribution par
+8, doubler la vitesse la multiplie par 4. Un impact immobile ne contribue pas
+au niveau global. Le budget `DestructionEnergyBudget = 1000` est un paramètre
+cinématique, sans prétention de simulation géologique.
+
+L'accumulation se fait en double précision et sature à 1. Elle ne dépend ni
+des texels déjà brûlés, ni de la chaleur, ni du temps entre les impacts. Des
+impacts répétés au même endroit continuent donc d'augmenter le niveau alors
+que la marque peut déjà être saturée. Les vitesses non finies ne contribuent
+pas au niveau global ; elles conservent le traitement de surface existant.
+`update(dt)` ne modifie pas le niveau et `clear()` le remet à zéro, ce qui couvre
+`R`, la fermeture et la réinitialisation de l'application.
+
+Ce signal n'est connecté à aucun seuil graphique dans cette phase. Les futurs
+consommateurs pourront le consulter pour les fissures ou la rupture, sans
+ajouter de dépendance inverse dans les systèmes de météores, lumières ou
+particules. Le rendu actuel des dégâts et de la chaleur reste identique.
+
+`make test` vérifie les petits/gros impacts, les vitesses, la progression,
+la saturation, les valeurs invalides ou extrêmes, le refroidissement, les
+impacts groupés et le replay. `make test-runtime` vérifie aussi la progression
+et la relecture exacte du niveau à chaque frame de la cinématique, ainsi que
+son reset dans `Application`.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si

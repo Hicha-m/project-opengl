@@ -413,6 +413,7 @@ int main()
     assert(app.meteors().spawn(touching, {0, 0, -10}, 5));
     app.run(1);
     assert(app.impactLights().lights().size() == 1);
+    assert(app.earthDamage().destructionLevel() > 0);
     assert(*std::max_element(app.earthDamage().heatPixels().begin(),app.earthDamage().heatPixels().end()) > 0);
     assert(*std::max_element(app.earthDamage().pixels().begin(),app.earthDamage().pixels().end()) > 0);
     assert(app.particles().size() >= 48 && app.particles().particles().back().age == 0);
@@ -421,6 +422,7 @@ int main()
     assert(app.meteors().size() == 0);
     assert(app.impactLights().lights().empty());
     assert(app.particles().size() == 0);
+    assert(app.earthDamage().destructionLevel() == 0);
     for (float value : app.earthDamage().pixels()) assert(value == 0);
     for (float value : app.earthDamage().heatPixels()) assert(value == 0);
     app.run(3);
@@ -470,16 +472,18 @@ int main()
         std::vector<std::vector<ImpactLight>> firstLights;
         std::vector<std::vector<Particle>> firstParticles;
         std::vector<std::vector<float>> firstDamage, firstHeat;
+        std::vector<float> firstDestruction;
         for (int pass = 0; pass < 2; ++pass)
         {
             MainSequence::reset(timeline, shower, meteors);
             flashes.clear();
-            damage.clear(); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
+            damage.clear(); assert(damage.destructionLevel() == 0); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
             particles.clear(); particleEmitter.reset(); trails.reset();
             flashes.publish(lights);
             timeline.play();
             int imageIndex = 0;
             std::size_t impactCount = 0;
+            float previousDestruction = 0;
             for (int frame = 0; frame <= 120; ++frame)
             {
                 if (frame > 0)
@@ -498,6 +502,10 @@ int main()
                     flashes.publish(lights);
                     shower.update(0.25f);
                 }
+                assert(damage.destructionLevel() >= previousDestruction && damage.destructionLevel() <= 1);
+                previousDestruction = damage.destructionLevel();
+                if (pass == 0) firstDestruction.push_back(damage.destructionLevel());
+                else assert(damage.destructionLevel() == firstDestruction[frame]);
                 impactCount += meteors.impacts().size();
                 for (const auto& impact : meteors.impacts())
                 {
@@ -572,7 +580,7 @@ int main()
                 ++imageIndex;
             }
             assert(imageIndex == 6 && !timeline.isPlaying() && timeline.getTime() == 30);
-            assert(impactCount > 0);
+            assert(impactCount > 0 && damage.destructionLevel() > 0);
         }
         damage.clear(); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
         // Controlled visible contact in front of the rendered Earth.
@@ -667,6 +675,7 @@ int main()
     assert(app.meteors().size() == 0 && !app.meteors().graphicsReady());
     assert(app.impactLights().lights().empty());
     assert(app.particles().size() == 0);
+    assert(app.earthDamage().destructionLevel() == 0);
     for (float value : app.earthDamage().pixels()) assert(value == 0);
     for (float value : app.earthDamage().heatPixels()) assert(value == 0);
     assert(glfwGetCurrentContext() == nullptr);
