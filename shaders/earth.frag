@@ -161,7 +161,7 @@ void main()
     // POINT LIGHTS
     // ------------------------------------------------
 
-    for (int i = 0; i < pointLightCount; ++i)
+    for (int i = 0; i < min(pointLightCount, MAX_POINT_LIGHTS); ++i)
     {
         PointLight light = pointLights[i];
 

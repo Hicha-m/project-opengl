@@ -126,6 +126,9 @@ void Application::update(float deltaTime)
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
     mMeteorSystem.update(deltaTime, SceneSetup::earthCollider(mScene, *mResources));
+    mImpactLightSystem.consume(mMeteorSystem.impacts());
+    mImpactLightSystem.update(deltaTime);
+    mImpactLightSystem.publish(mLightManager);
     mMeteorShower.update(deltaTime);
     mDebugTimer += deltaTime;
     if (mDebugTimer >= 1.0)
@@ -236,6 +239,8 @@ void Application::restartSequence()
 {
     if (!mInitialized) return;
     MainSequence::reset(mTimeline, mMeteorShower, mMeteorSystem);
+    mImpactLightSystem.clear();
+    mImpactLightSystem.publish(mLightManager);
     mTimeline.play();
     mDebugTimer = 0;
 }
@@ -253,6 +258,7 @@ void Application::shutdown()
     mTimeline = Timeline{}; // Release borrowed scene/camera bindings first.
     mMeteorShower.reset();
     mMeteorSystem.clear();
+    mImpactLightSystem.clear();
     mMeteorSystem.releaseGraphics();
     mScene.objects.clear();
     mResources.reset(); // GPU destructors require the current context.

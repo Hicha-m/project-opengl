@@ -186,8 +186,16 @@ int main()
     app.run(3); // Also exercise Application's simulation and render integration.
     assert(app.meteors().size() == 1);
     assert(app.meteors().meteors()[0].transform.position.x > 30);
+    Transform touching;
+    touching.position = {30, 50, 10.4f};
+    touching.scale = glm::vec3(0.5f);
+    assert(app.meteors().spawn(touching, {0, 0, -10}, 5));
+    app.run(1);
+    assert(app.impactLights().lights().size() == 1);
+    assert(app.impactLights().lights()[0].intensity == app.impactLights().lights()[0].initialIntensity);
     app.restartSequence();
     assert(app.meteors().size() == 0);
+    assert(app.impactLights().lights().empty());
     app.run(3);
     assert(app.meteors().size() == 0);
     {
@@ -217,6 +225,7 @@ int main()
         assert(rejectedScale);
         earth->transform.scale = glm::vec3(10);
         MeteorSystem meteors;
+        ImpactLightSystem flashes;
         MeteorShower shower(meteors);
         assert(meteors.initGraphics());
         assert(MainSequence::build(timeline, camera, scene, shower));
@@ -226,9 +235,12 @@ int main()
             "/tmp/space-meteors-expired.ppm", "/tmp/space-end.ppm"};
         std::vector<std::vector<unsigned char>> firstPass;
         std::vector<std::vector<MeteorImpact>> firstImpacts;
+        std::vector<std::vector<ImpactLight>> firstLights;
         for (int pass = 0; pass < 2; ++pass)
         {
             MainSequence::reset(timeline, shower, meteors);
+            flashes.clear();
+            flashes.publish(lights);
             timeline.play();
             int imageIndex = 0;
             std::size_t impactCount = 0;
@@ -238,6 +250,9 @@ int main()
                 {
                     timeline.update(0.25f);
                     meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
+                    flashes.consume(meteors.impacts());
+                    flashes.update(0.25f);
+                    flashes.publish(lights);
                     shower.update(0.25f);
                 }
                 impactCount += meteors.impacts().size();
@@ -259,6 +274,19 @@ int main()
                         const auto& b = firstImpacts[frame][i];
                         assert(a.position == b.position && a.normal == b.normal);
                         assert(a.velocity == b.velocity && a.meteorScale == b.meteorScale);
+                    }
+                }
+                if (pass == 0) firstLights.push_back(flashes.lights());
+                else
+                {
+                    assert(flashes.lights().size() == firstLights[frame].size());
+                    for (std::size_t i = 0; i < flashes.lights().size(); ++i)
+                    {
+                        const auto& a = flashes.lights()[i];
+                        const auto& b = firstLights[frame][i];
+                        assert(a.position == b.position && a.color == b.color);
+                        assert(a.initialIntensity == b.initialIntensity && a.intensity == b.intensity);
+                        assert(a.age == b.age && a.lifetime == b.lifetime);
                     }
                 }
                 if (frame < 40) assert(meteors.size() == 0 && !shower.isRunning());
@@ -292,6 +320,8 @@ int main()
         }
         // Controlled visible contact in front of the rendered Earth.
         MainSequence::reset(timeline, shower, meteors);
+        flashes.clear();
+        flashes.publish(lights);
         assert(meteors.impacts().empty());
         SceneSetup::update(scene, camera.getPosition());
         const auto view = camera.getViewMatrix();
@@ -321,13 +351,54 @@ int main()
         assert(glm::length(meteors.impacts()[0].position
             - (collider.center + glm::vec3(0, 0, collider.radius))) < 0.0001f);
         drawContact();
-        assert(pixels() == baseline); // Actual disappearance at contact, without effects.
+        assert(pixels() == baseline); // Meteor gone before consuming its impact.
         capture("/tmp/impact-removed.ppm", 640, 480);
+        flashes.consume(meteors.impacts());
+        flashes.update(0.1f);
+        flashes.publish(lights);
+        drawContact();
+        const auto peak = pixels();
+        assert(peak != baseline); // Real Earth shading changes, no visible source mesh.
+        capture("/tmp/impact-flash-peak.ppm", 640, 480);
+        auto brightnessGain = [&](const std::vector<unsigned char>& image)
+        {
+            long gain = 0;
+            for (std::size_t i = 0; i < image.size(); ++i)
+                gain += int(image[i]) - int(baseline[i]);
+            return gain;
+        };
+        assert(brightnessGain(peak) > 0);
+        flashes.update(0.25f);
+        flashes.publish(lights);
+        drawContact();
+        const auto faded = pixels();
+        assert(brightnessGain(faded) > 0 && brightnessGain(faded) < brightnessGain(peak));
+        capture("/tmp/impact-flash-faded.ppm", 640, 480);
+        flashes.update(0.25f);
+        flashes.publish(lights);
+        drawContact();
+        assert(flashes.lights().empty() && pixels() == baseline);
+        capture("/tmp/impact-flash-expired.ppm", 640, 480);
+
+        // Query the actual shader uniform after an overflowing impact burst.
+        std::vector<MeteorImpact> burst(80, {{30, 50, 10}, {0, 0, 1}, {0, 0, -10}, 0.5f});
+        flashes.consume(burst);
+        flashes.update(1);
+        flashes.publish(lights);
+        resources.earthShader.use();
+        lights.applyToShader(resources.earthShader);
+        GLint count = 0;
+        glGetUniformiv(resources.earthShader.getProgram(),
+            resources.earthShader.getUniformLocation("pointLightCount"), &count);
+        assert(count == int(LightManager::MaxPointLights));
+        drawContact();
+        assert(glGetError() == GL_NO_ERROR);
     } // All these GPU resources are released while the context is alive.
     assert(glGetError() == GL_NO_ERROR);
     app.shutdown();
     app.shutdown();
     assert(app.meteors().size() == 0 && !app.meteors().graphicsReady());
+    assert(app.impactLights().lights().empty());
     assert(glfwGetCurrentContext() == nullptr);
     assert(app.init());
     assert(app.meteors().size() == 0 && app.meteors().graphicsReady());

@@ -9,6 +9,7 @@
 #include "camera/CinematicCamera.h"
 #include "systems/MeteorSystem.h"
 #include "systems/MeteorShower.h"
+#include "systems/ImpactLightSystem.h"
 
 struct GLFWwindow;
 
@@ -33,6 +34,7 @@ public:
     void shutdown();
     void restartSequence();
     MeteorSystem& meteors() { return mMeteorSystem; }
+    const ImpactLightSystem& impactLights() const { return mImpactLightSystem; }
 
 private:
     bool initOpenGL();
@@ -66,5 +68,6 @@ private:
     CinematicCamera mCinematicCamera;
     Timeline mTimeline;
     MeteorSystem mMeteorSystem;
+    ImpactLightSystem mImpactLightSystem;
     MeteorShower mMeteorShower{mMeteorSystem};
 };

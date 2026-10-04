@@ -41,6 +41,8 @@ projet/
 │   │   ├── Meteor.h / MeteorImpact.h
 │   │   ├── MeteorSystem.h / MeteorSystem.cpp
 │   │   ├── MeteorResources.h / MeteorResources.cpp
+│   │   ├── ImpactLight.h
+│   │   ├── ImpactLightSystem.h / ImpactLightSystem.cpp
 │   │   └── MeteorShower.h / MeteorShower.cpp
 │   └── cinematic/
 │       └── MainSequence.h / MainSequence.cpp
@@ -52,6 +54,7 @@ projet/
 │   ├── meteor_system.cpp
 │   ├── meteor_shower.cpp
 │   ├── meteor_collision.cpp
+│   ├── impact_light.cpp
 │   └── application.cpp
 ├── build/                    # objets, dépendances et tests compilés, ignorés par Git
 └── project                   # exécutable généré
@@ -78,7 +81,7 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `scene/SceneObject.h` | Représente un objet nommé : une transformation, un mesh et un matériau. |
 | `scene/Transform.h` | Stocke position, rotation et échelle. Produit la matrice de modèle utilisée pour placer l'objet. Les rotations sont en radians. |
 | `scene/Material.h` | Décrit l'apparence et les états de rendu : shader, textures, uniforms, transparence, profondeur et réception de lumière. |
-| `scene/LightManager` | Stocke une lumière directionnelle et les lumières ponctuelles, puis transmet leurs paramètres aux shaders. |
+| `scene/LightManager` | Stocke une lumière directionnelle, les lumières ponctuelles permanentes et temporaires. Transmet au shader les 32 plus intenses, avec ordre d'insertion conservé à intensité égale. |
 | `scene/SceneResources.h` | Possède les shaders, textures et sphères de la démonstration. Les objets empruntent ces ressources sans les posséder. |
 | `scene/SceneSetup` | Charge les ressources et construit Terre, nuages, Soleil, étoiles et lumière. Maintient aussi les étoiles autour de la caméra. |
 | `animation/Keyframe.h` | Définit une clé : instant, valeur et easing du segment suivant. |
@@ -95,13 +98,16 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `systems/MeteorResources` | Possède une sphère peu détaillée, un shader, la texture lunaire réutilisée et un seul matériau pour toute la population. |
 | `geometry/SphereCollider.h` | Centre et rayon monde, sans dépendance à la scène ou au rendu. |
 | `systems/MeteorImpact.h` | Contact sur la cible, normale, vitesse et taille ; aucune logique d’effet. |
+| `systems/ImpactLight.h` | Position, couleur, intensités, âge, durée et état de naissance d'un flash. |
+| `systems/ImpactLightSystem` | Consomme les impacts sans connaître la Terre ni MeteorSystem. Crée les flashes, les fait décroître et publie les lumières temporaires au LightManager. |
+| `tests/impact_light.cpp` | Vérifie la première frame, la décroissance, l'expiration, les impacts simultanés, la sélection GPU et la relecture. |
 | `tests/meteor_collision.cpp` | Vérifie les contacts continus, le tunneling, les lifetimes et les impacts multiples. |
 | `systems/MeteorShower` | Générateur CPU indépendant : boîte de spawn, direction avec dispersion conique, cadence par seconde, plages de paramètres et seed reproductible. |
 | `tests/meteor_shower.cpp` | Vérifie start/stop, validation, plages, dispersion, seed et cadence à 30/60/144 FPS. |
 | `tests/meteor_system.cpp` | Vérifie sans OpenGL le mouvement indépendant, les expirations, les entrées invalides, clear et 1 000 instances. |
 | `tests/timeline.cpp` | Vérifie les pistes, la pause, la reprise, la fin, les événements et la relecture. |
 | `tests/main_sequence.cpp` | Vérifie les paramètres de la séquence complète et les bindings après ajout d'objets. |
-| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL de la séquence et des météores, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte dix-sept captures dans `/tmp`. |
+| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL, les flashes sur la Terre, la limite GPU, la relecture des lumières et des images, le reset et la récupération après ressources absentes. Exporte les captures dans `/tmp`. |
 | `Makefile` | Compile et lie l'application et les tests, suit les dépendances entre headers et sources, lance l'application ou nettoie les fichiers générés. |
 | `.gitignore` | Exclut notamment l'exécutable et le dossier de compilation `build/` du suivi Git. |
 
@@ -126,9 +132,26 @@ qui calcule la couleur des fragments :
 `Application` demande à `SceneSetup` de construire le monde et à `MainSequence`
 de configurer le film. À chaque frame, elle traite les entrées, avance `Timeline`
 (qui met à jour la caméra et les transformations), avance aussi la simulation de
-`MeteorSystem`, puis la génération de `MeteorShower`, et demande à `Renderer`
+`MeteorSystem`, consomme ses impacts avec `ImpactLightSystem`, met à jour et publie
+les flashes, puis avance la génération de `MeteorShower`, et demande à `Renderer`
 de dessiner `Scene` et à `MeteorSystem` de dessiner sa population avec les mêmes
 lumières et matrices de caméra.
+
+Chaque flash est placé à `impact.position + normal * 0.2` en coordonnées monde.
+Son intensité initiale vaut `clamp(speed * meteorScale * 3, 2, 30)`, sa couleur
+est orangée et sa durée vaut 0,5 seconde. La première mise à jour après sa
+création conserve son âge à zéro, même si `dt` est grand : dans l'ordre
+`consume -> update -> publish -> render`, il est présenté à son intensité
+initiale. Les frames suivantes appliquent une décroissance quadratique
+`initialIntensity * (1 - age / lifetime)^2`, puis suppriment le flash expiré.
+L'atténuation ponctuelle (`constant = 1`, `linear = 1`, `quadratic = 2`) limite
+l'éclairage au voisinage du contact. Au-delà de 32 lumières, seules les plus
+intenses sont envoyées au GPU ; les autres continuent de vieillir sur le CPU.
+
+`R` vide aussi les flashes et leur publication dans `LightManager`. Les lumières
+permanentes restent présentes. Il n'y a à cette phase ni particules, ni bloom,
+ni cratère. Captures du test de contact : `/tmp/impact-flash-peak.ppm`,
+`/tmp/impact-flash-faded.ppm` et `/tmp/impact-flash-expired.ppm`.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
@@ -171,7 +194,7 @@ Depuis `projet` (les chemins de shaders et textures sont relatifs à ce dossier)
 make                  # compile l'application, sans la lancer
 make project          # même compilation
 make run              # compile si nécessaire, puis lance l'application
-make test             # tests Timeline, MainSequence et meteores (generation/collision), sans fenêtre
+make test             # tests Timeline, séquence, météores et flashes, sans fenêtre
 make test-sequence    # seulement le test de séquence
 make test-runtime     # test OpenGL masqué, nécessite un affichage X11
 make clean            # supprime build/ et l'exécutable project
