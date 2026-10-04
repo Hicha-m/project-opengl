@@ -94,6 +94,9 @@ void Application::run(std::size_t frameLimit, bool present)
         }
         if (mWasSuspended || WindowSystem::consumeResume(mWindow)) {
             mMusic.setPaused(mSequencePaused); mClockResync = true; mWasSuspended = false;
+#ifdef PROJECT_MOBILE
+            std::cout << "[MOBILE] foreground resumed timeline=" << mTimeline.getTime() << " paused=" << mSequencePaused << std::endl;
+#endif
         }
         double currentTime = WindowSystem::time();
         if(mClockResync) { lastTime=currentTime; mClockResync=false; }

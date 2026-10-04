@@ -2,6 +2,7 @@
 """Install the real app, run its mobile integration test and capture its screen."""
 import argparse
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -21,6 +22,10 @@ def wait_for(check, seconds=480):
         time.sleep(2)
     raise RuntimeError("Mobile test timed out")
 
+def timeline(content):
+    matches = re.findall(r"\[DEBUG\] timeline=([0-9.]+)", content)
+    return float(matches[-1]) if matches else -1
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("platform", choices=("android", "ios"))
@@ -35,16 +40,32 @@ def main():
         run("adb", "logcat", "-c")
         run("adb", "shell", "am", "start", "-n", ANDROID + "/.MainActivity", "--ez", "mobile_test", "true")
         def logs(): return run("adb", "logcat", "-d", "-v", "brief")
-        wait_for(lambda: "MOBILE_MVP_TEST_PASSED" in logs())
+        started = time.monotonic()
+        def passed():
+            content = logs()
+            if "MOBILE_MVP_TEST_PASSED" in content: return True
+            if "MOBILE_MVP_TEST_FAILED" in content or (time.monotonic() - started > 15 and not run("adb", "shell", "pidof", ANDROID).strip()):
+                (args.output / "android.log").write_text(content)
+                raise RuntimeError("Android test failed: " + content[-4000:])
+            return False
+        try:
+            wait_for(passed)
+        except Exception:
+            (args.output / "android.log").write_text(logs())
+            raise
         screenshot = subprocess.check_output(["adb", "exec-out", "screencap", "-p"])
         (args.output / "android.png").write_bytes(screenshot)
         process = run("adb", "shell", "pidof", ANDROID).strip()
+        wait_for(lambda: timeline(logs()) >= 0, 60)
+        before = timeline(logs())
+        previous_resumes = logs().count("[MOBILE] foreground resumed")
         run("adb", "shell", "input", "keyevent", "KEYCODE_HOME")
         time.sleep(2)
         run("adb", "shell", "am", "start", "-n", ANDROID + "/.MainActivity")
         time.sleep(3)
         if run("adb", "shell", "pidof", ANDROID).strip() != process:
             raise RuntimeError("Android application did not survive background/foreground")
+        wait_for(lambda: logs().count("[MOBILE] foreground resumed") > previous_resumes and timeline(logs()) > before + 0.2, 60)
         (args.output / "android.log").write_text(logs())
     else:
         devices = json.loads(run("xcrun", "simctl", "list", "devices", "available", "--json"))
@@ -61,15 +82,20 @@ def main():
                 def passed():
                     content = log.read_text()
                     if "MOBILE_MVP_TEST_PASSED" in content: return True
+                    if "MOBILE_MVP_TEST_FAILED" in content: raise RuntimeError(content[-4000:])
                     if process.poll() is not None: raise RuntimeError("iOS application exited: " + content[-4000:])
                     return False
                 wait_for(passed)
                 run("xcrun", "simctl", "io", device, "screenshot", str(args.output / "ios.png"))
+                wait_for(lambda: timeline(log.read_text()) >= 0, 60)
+                before = timeline(log.read_text())
+                previous_resumes = log.read_text().count("[MOBILE] foreground resumed")
                 run("xcrun", "simctl", "launch", device, "com.apple.Preferences")
                 time.sleep(2)
                 run("xcrun", "simctl", "launch", device, BUNDLE)
                 time.sleep(3)
                 if process.poll() is not None: raise RuntimeError("iOS application exited during background/foreground")
+                wait_for(lambda: log.read_text().count("[MOBILE] foreground resumed") > previous_resumes and timeline(log.read_text()) > before + 0.2, 60)
             finally:
                 run("xcrun", "simctl", "terminate", device, BUNDLE)
                 process.wait(timeout=20)

@@ -65,6 +65,9 @@ void mobileTest(Application& app) {
 
 int main(int argc, char** argv)
 {
+#ifdef PROJECT_MOBILE
+    std::cout << std::unitbuf;
+#endif
     bool smokeTest = false;
     bool mobileTesting = false, keepRunning = false;
     bool softwareContext = false;
@@ -114,6 +117,7 @@ int main(int argc, char** argv)
         }
         return 0;
     } catch (const std::exception& error) {
+        if (mobileTesting) std::cerr << "MOBILE_MVP_TEST_FAILED: ";
         std::cerr << error.what() << '\n';
         return 1;
     }
