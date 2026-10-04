@@ -10,6 +10,7 @@ uniform mat4 view;
 uniform mat4 projection;
 
 out vec3 FragPos;
+out vec3 LocalPosition;
 out vec3 Normal;
 out vec2 TexCoord;
 
@@ -18,6 +19,7 @@ out vec3 Bitangent;
 
 void main()
 {
+    LocalPosition = pos;
     FragPos =
         vec3(model * vec4(pos, 1.0));
 

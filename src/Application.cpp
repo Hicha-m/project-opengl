@@ -180,6 +180,7 @@ void Application::render()
         static_cast<float>(mOptions.width) / mOptions.height, 0.1f, MAX_DISTANCE);
     const auto position = camera.getPosition();
     SceneSetup::update(mScene, position);
+    mScene.findObject("Earth")->material.setFloat("destructionLevel", mEarthDamageSystem.destructionLevel());
     mRenderer.render(mScene, mLightManager, view, projection, position);
     mMeteorSystem.render(mRenderer, mLightManager, view, projection, position);
     mParticleSystem.render(view, projection);

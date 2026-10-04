@@ -381,6 +381,91 @@ static void checkEarthHeat()
     assert(glGetError() == GL_NO_ERROR);
 }
 
+static void checkEarthCracks()
+{
+    SceneResources resources; Scene scene; LightManager lights; Renderer renderer;
+    assert(SceneSetup::build(scene, lights, resources));
+    auto* earth = scene.findObject("Earth");
+    DirectionalLight sun; sun.direction = {0,0,1}; sun.intensity = 0;
+    lights.setDirectionalLight(sun);
+    glm::vec3 eye = earth->transform.position + glm::vec3(0,0,30);
+    glm::mat4 view = glm::lookAt(eye, earth->transform.position, glm::vec3(0,1,0));
+    const auto projection = glm::ortho(-13.0f,13.0f,-9.75f,9.75f,0.1f,100.0f);
+    auto draw = [&](float level) {
+        earth->material.setFloat("destructionLevel", level);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        renderer.renderMesh(*earth->mesh,earth->material,earth->transform,lights,view,projection,eye);
+        return pixels();
+    };
+    const auto baseline = draw(0);
+    assert(draw(0.02f) == baseline); // No cracks before damage or global progression.
+    std::vector<std::vector<unsigned char>> firstPass;
+    long previousGain = 0;
+    std::size_t previousArea = 0;
+    for (float level : {0.2f,0.5f,0.8f,0.95f}) {
+        const auto image = draw(level);
+        long gain = 0; std::size_t area = 0;
+        for (std::size_t i = 0; i < image.size(); i += 3) {
+            int difference = int(image[i])+int(image[i+1])+int(image[i+2])
+                -int(baseline[i])-int(baseline[i+1])-int(baseline[i+2]);
+            gain += difference;
+            if (difference > 40) ++area;
+        }
+        assert(gain >= previousGain && area >= previousArea);
+        previousGain = gain; previousArea = area;
+        firstPass.push_back(image);
+        auto path = "/tmp/earth-cracks-" + std::to_string(int(level*100)) + ".ppm";
+        capture(path.c_str(),640,480);
+    }
+    assert(previousGain > 100000 && previousArea > 1000);
+    const auto& extreme = firstPass.back();
+    bool whiteInterior = false;
+    for (std::size_t i = 0; i < extreme.size(); i += 3)
+        if (extreme[i] > 240 && extreme[i+1] > 240 && extreme[i+2] > 200) whiteInterior = true;
+    assert(whiteInterior); // Extreme emission with no Sun or point lights.
+    // The depth silhouette is identical: no vertex displacement or breakup.
+    std::vector<float> intactDepth(640*480), crackedDepth(640*480);
+    draw(0); glReadPixels(0,0,640,480,GL_DEPTH_COMPONENT,GL_FLOAT,intactDepth.data());
+    draw(0.95f); glReadPixels(0,0,640,480,GL_DEPTH_COMPONENT,GL_FLOAT,crackedDepth.data());
+    assert(intactDepth == crackedDepth);
+    // Rotate Earth and view together: local patterns remain registered to the crust.
+    earth->transform.rotation.y = 0.7f;
+    const auto rotation = glm::rotate(glm::mat4(1),0.7f,glm::vec3(0,1,0));
+    eye = earth->transform.position + glm::vec3(rotation*glm::vec4(0,0,30,0));
+    view = glm::lookAt(eye,earth->transform.position,glm::vec3(0,1,0));
+    sun.direction = glm::vec3(rotation*glm::vec4(0,0,1,0)); lights.setDirectionalLight(sun);
+    const auto rotated = draw(0.95f);
+    long error = 0;
+    for (std::size_t i = 0; i < extreme.size(); ++i) error += std::abs(int(extreme[i])-int(rotated[i]));
+    assert(double(error)/extreme.size() < 1.0); // Float transform/interpolation tolerance.
+    earth->transform.rotation.y = 0;
+    eye = earth->transform.position + glm::vec3(0,0,30);
+    view = glm::lookAt(eye,earth->transform.position,glm::vec3(0,1,0));
+    sun.direction = {0,0,1}; lights.setDirectionalLight(sun);
+    assert(draw(0) == baseline);
+    int index = 0;
+    for (float level : {0.2f,0.5f,0.8f,0.95f}) assert(draw(level) == firstPass[index++]);
+    // At early levels, a cooled damage patch nucleates fractures locally.
+    EarthDamageSystem damage;
+    MeteorImpact impact{earth->transform.position+glm::vec3(0,0,10),{0,0,1},{0,0,-10},1};
+    damage.consume({impact},earth->transform); damage.update(30);
+    assert(damage.upload(resources.earthDamageTexture,resources.earthHeatTexture));
+    const auto burned = draw(0);
+    const auto early = draw(0.1f);
+    assert(early != burned);
+    long earlyGain = 0;
+    for (std::size_t i = 0; i < early.size(); ++i) earlyGain += int(early[i])-int(burned[i]);
+    assert(earlyGain > 0);
+    capture("/tmp/earth-cracks-local.ppm",640,480);
+    // Ongoing thermal impacts still add emission on top of the crack network.
+    damage.consume({impact},earth->transform);
+    assert(damage.upload(resources.earthDamageTexture,resources.earthHeatTexture));
+    const auto hot = draw(0.1f); assert(hot != early);
+    damage.clear(); assert(damage.upload(resources.earthDamageTexture,resources.earthHeatTexture));
+    assert(draw(0) == baseline);
+    assert(glGetError() == GL_NO_ERROR);
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -400,6 +485,7 @@ int main()
     checkTrails(app.meteors(),app.particles());
     checkEarthDamage();
     checkEarthHeat();
+    checkEarthCracks();
     Transform meteor;
     meteor.position = {30, 50, 15};
     meteor.scale = glm::vec3(0.5f);
@@ -563,6 +649,7 @@ int main()
                 const auto view = camera.getViewMatrix();
                 const auto projection = glm::perspective(glm::radians(camera.getFOV()),
                     640.0f / 480, 0.1f, 100000000.0f);
+                scene.findObject("Earth")->material.setFloat("destructionLevel", damage.destructionLevel());
                 renderer.render(scene, lights, view, projection, camera.getPosition());
                 const auto withoutMeteors = pixels();
                 meteors.render(renderer, lights, view, projection, camera.getPosition());
@@ -583,6 +670,7 @@ int main()
             assert(impactCount > 0 && damage.destructionLevel() > 0);
         }
         damage.clear(); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
+        scene.findObject("Earth")->material.setFloat("destructionLevel", 0.0f);
         // Controlled visible contact in front of the rendered Earth.
         MainSequence::reset(timeline, shower, meteors);
         flashes.clear();

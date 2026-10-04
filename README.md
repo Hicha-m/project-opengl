@@ -274,9 +274,8 @@ le replay des deux cartes et des images de la cinématique.
 Captures : `/tmp/earth-heat-night-peak.ppm`, `/tmp/earth-heat-night-cooled.ppm`,
 `/tmp/earth-heat-night-reheated.ppm` et `/tmp/earth-heat-cold-burn.ppm`.
 
-Les étapes suivantes restent successives : 4.8.4 ajoutera les fissures émissives
-et 4.8.5 la rupture avec fragments préparés, noyau blanc, éclairage du noyau
-et bloom.
+La prochaine étape 4.8.5 ajoutera la rupture avec fragments préparés, noyau
+blanc, éclairage du noyau et bloom.
 
 ## Niveau de destruction global — phase 4.8.3
 
@@ -298,16 +297,50 @@ pas au niveau global ; elles conservent le traitement de surface existant.
 `update(dt)` ne modifie pas le niveau et `clear()` le remet à zéro, ce qui couvre
 `R`, la fermeture et la réinitialisation de l'application.
 
-Ce signal n'est connecté à aucun seuil graphique dans cette phase. Les futurs
-consommateurs pourront le consulter pour les fissures ou la rupture, sans
-ajouter de dépendance inverse dans les systèmes de météores, lumières ou
-particules. Le rendu actuel des dégâts et de la chaleur reste identique.
+Le système expose seulement ce signal et ne déclenche pas d'effets lui-même.
+Depuis 4.8.4, Application le transmet au matériau terrestre pour les fissures,
+sans dépendance inverse vers les systèmes de météores, lumières ou particules.
 
 `make test` vérifie les petits/gros impacts, les vitesses, la progression,
 la saturation, les valeurs invalides ou extrêmes, le refroidissement, les
 impacts groupés et le replay. `make test-runtime` vérifie aussi la progression
 et la relecture exacte du niveau à chaque frame de la cinématique, ainsi que
 son reset dans `Application`.
+
+## Fissuration de la croûte — phase 4.8.4
+
+`Application::render` transmet `destructionLevel` au matériau terrestre à
+chaque rendu. Le matériau démarre à zéro et le reset de `EarthDamageSystem`
+ramène aussi le signal des fissures à zéro au rendu suivant. Le système de
+dégâts reste indépendant de l'effet graphique.
+
+Le shader évalue un réseau cellulaire 3D sur la position locale normalisée
+de la sphère (fréquence 8). Les frontières entre cellules forment les fissures.
+Le motif est déterministe et ne dépend ni du temps ni des coordonnées monde ;
+il reste donc attaché à la croûte pendant la rotation, sans couture U ni
+singularité aux pôles. Aucune texture de fissures supplémentaire n'est requise.
+
+Au début, les marques brûlées et leur voisinage favorisent l'apparition des
+fissures. Entre 0,18 et 0,8 de destruction, leur couverture devient globale.
+Chaque cellule possède un seuil déterministe : le réseau s'ouvre progressivement.
+La largeur augmente avec le carré du niveau, avec anti-aliasing par dérivées.
+La palette passe de rouge/orange à jaune-blanc, avec une émission croissante
+ajoutée après l'éclairage. Les crevasses restent visibles côté nuit ; les dégâts
+permanents et la chaleur temporaire continuent de fonctionner ensemble.
+
+La géométrie reste intacte : aucun déplacement de sommet, séparation de
+morceaux ou bloom dans cette phase. L'émission forte est limitée par le
+framebuffer actuel, comme l'incandescence des impacts.
+
+Le test OpenGL vérifie l'absence initiale de fissures, l'augmentation de leur
+surface et de leur luminosité à 0,2/0,5/0,8/0,95, l'intérieur jaune-blanc sans
+Soleil ni lumière ponctuelle, la stabilité du motif quand Terre et caméra
+tournent ensemble, la silhouette et le depth buffer inchangés, les fissures
+locales près d'un impact refroidi, la chaleur superposée et le reset. La
+cinématique complète vérifie le replay des images avec le signal réel.
+Captures : `/tmp/earth-cracks-20.ppm`, `/tmp/earth-cracks-50.ppm`,
+`/tmp/earth-cracks-80.ppm`, `/tmp/earth-cracks-95.ppm` et
+`/tmp/earth-cracks-local.ppm`.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si

@@ -46,6 +46,7 @@ bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources&
     earthObject.material.addTexture("normalMap",&resources.earthNormalTexture,3);
     earthObject.material.addTexture("damageMap", &resources.earthDamageTexture, 4);
     earthObject.material.addTexture("heatMap", &resources.earthHeatTexture, 5);
+    earthObject.material.setFloat("destructionLevel", 0.0f);
     earthObject.material.receivesLighting = true;
     scene.addObject(earthObject);
 
