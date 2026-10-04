@@ -45,6 +45,7 @@ def main():
     assets = ROOT / "build/mobile-assets"
     for name in ("shaders", "textures", "models"):
         shutil.copytree(ROOT / name, assets / name, dirs_exist_ok=True)
+    shutil.copytree(ROOT / "third_party/licenses", assets / "licenses", dirs_exist_ok=True)
     music = assets / "build/music"
     music.mkdir(parents=True, exist_ok=True)
     for source, target in (("Can You Hear The Music.mp3", "cinematic.wav"), ("asteroid-hitting-something.mp3", "impact.wav")):

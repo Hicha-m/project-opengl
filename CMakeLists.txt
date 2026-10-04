@@ -146,6 +146,7 @@ if(APPLE)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/shaders" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/shaders"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/textures" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/textures"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/models" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/models"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/third_party/licenses" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/licenses"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/music" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/build/music"
         VERBATIM)
 elseif(UNIX)
