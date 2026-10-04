@@ -2,6 +2,8 @@
 #include <memory>
 #include <vector>
 #include "systems/Meteor.h"
+#include "systems/MeteorImpact.h"
+#include "geometry/SphereCollider.h"
 
 class Renderer;
 class LightManager;
@@ -18,6 +20,9 @@ public:
     // CPU simulation is usable without OpenGL. Invalid input is rejected.
     bool spawn(const Transform& transform, const glm::vec3& velocity, float lifetime);
     void update(float deltaTime);
+    void update(float deltaTime, const SphereCollider& collider);
+    // Cleared on every update (even invalid dt) and clear; no effects are triggered.
+    const std::vector<MeteorImpact>& impacts() const { return mImpacts; }
     void clear(); // Removes instances, keeps shared graphics available for reuse.
     std::size_t size() const { return mMeteors.size(); }
     // Read-only observation for diagnostics; invalidated by spawn/update/clear.
@@ -32,6 +37,8 @@ public:
         const glm::vec3& cameraPosition);
 
 private:
+    void simulate(float deltaTime, const SphereCollider* collider);
     std::vector<Meteor> mMeteors;
+    std::vector<MeteorImpact> mImpacts;
     std::unique_ptr<MeteorResources> mResources;
 };

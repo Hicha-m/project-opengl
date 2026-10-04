@@ -5,6 +5,7 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include <stdexcept>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -203,6 +204,18 @@ int main()
         assert(scene.findObject("EarthClouds")->material.blending);
         assert(!scene.findObject("Stars")->material.depthWrite);
         assert(lights.getDirectionalLight().intensity == 1);
+        const auto collider = SceneSetup::earthCollider(scene, resources);
+        assert(collider.center == scene.findObject("Earth")->transform.position);
+        assert(collider.radius == resources.earthSphere.getRadius() * scene.findObject("Earth")->transform.scale.x);
+        auto* earth = scene.findObject("Earth");
+        earth->transform.scale = glm::vec3(20);
+        assert(SceneSetup::earthCollider(scene, resources).radius == resources.earthSphere.getRadius() * 20);
+        earth->transform.scale.y = 21;
+        bool rejectedScale = false;
+        try { SceneSetup::earthCollider(scene, resources); }
+        catch (const std::invalid_argument&) { rejectedScale = true; }
+        assert(rejectedScale);
+        earth->transform.scale = glm::vec3(10);
         MeteorSystem meteors;
         MeteorShower shower(meteors);
         assert(meteors.initGraphics());
@@ -212,21 +225,44 @@ int main()
             "/tmp/space-shower-stop.ppm", "/tmp/space-after-shower.ppm",
             "/tmp/space-meteors-expired.ppm", "/tmp/space-end.ppm"};
         std::vector<std::vector<unsigned char>> firstPass;
+        std::vector<std::vector<MeteorImpact>> firstImpacts;
         for (int pass = 0; pass < 2; ++pass)
         {
             MainSequence::reset(timeline, shower, meteors);
             timeline.play();
             int imageIndex = 0;
+            std::size_t impactCount = 0;
             for (int frame = 0; frame <= 120; ++frame)
             {
                 if (frame > 0)
                 {
                     timeline.update(0.25f);
-                    meteors.update(0.25f);
+                    meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
                     shower.update(0.25f);
                 }
+                impactCount += meteors.impacts().size();
+                for (const auto& impact : meteors.impacts())
+                {
+                    assert(std::abs(glm::length(impact.position - collider.center) - collider.radius) < 0.0001f);
+                    assert(std::abs(glm::length(impact.normal) - 1) < 0.0001f);
+                }
+                for (const auto& meteor : meteors.meteors())
+                    assert(glm::distance(meteor.transform.position, collider.center)
+                        >= collider.radius + meteor.transform.scale.x - 0.0001f);
+                if (pass == 0) firstImpacts.push_back(meteors.impacts());
+                else
+                {
+                    assert(meteors.impacts().size() == firstImpacts[frame].size());
+                    for (std::size_t i = 0; i < meteors.impacts().size(); ++i)
+                    {
+                        const auto& a = meteors.impacts()[i];
+                        const auto& b = firstImpacts[frame][i];
+                        assert(a.position == b.position && a.normal == b.normal);
+                        assert(a.velocity == b.velocity && a.meteorScale == b.meteorScale);
+                    }
+                }
                 if (frame < 40) assert(meteors.size() == 0 && !shower.isRunning());
-                if (frame == 60) assert(meteors.size() > 100 && shower.isRunning());
+                if (frame == 60) assert(meteors.size() > 0 && shower.isRunning());
                 if (frame == 80 || frame == 88)
                     assert(meteors.size() > 0 && !shower.isRunning());
                 if (frame >= 108) assert(meteors.size() == 0 && !shower.isRunning());
@@ -252,7 +288,41 @@ int main()
                 ++imageIndex;
             }
             assert(imageIndex == 6 && !timeline.isPlaying() && timeline.getTime() == 30);
+            assert(impactCount > 0);
         }
+        // Controlled visible contact in front of the rendered Earth.
+        MainSequence::reset(timeline, shower, meteors);
+        assert(meteors.impacts().empty());
+        SceneSetup::update(scene, camera.getPosition());
+        const auto view = camera.getViewMatrix();
+        const auto projection = glm::perspective(glm::radians(camera.getFOV()),
+            640.0f / 480, 0.1f, 100000000.0f);
+        auto drawContact = [&]()
+        {
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            renderer.render(scene, lights, view, projection, camera.getPosition());
+            meteors.render(renderer, lights, view, projection, camera.getPosition());
+        };
+        drawContact();
+        const auto baseline = pixels();
+        Transform approaching;
+        approaching.position = collider.center + glm::vec3(0, 0, collider.radius + 3);
+        approaching.scale = glm::vec3(0.5f);
+        assert(meteors.spawn(approaching, {0, 0, -10}, 5));
+        drawContact();
+        assert(pixels() != baseline);
+        capture("/tmp/impact-before.ppm", 640, 480);
+        meteors.update(0.2f, collider);
+        assert(meteors.size() == 1 && meteors.impacts().empty());
+        drawContact();
+        capture("/tmp/impact-approaching.ppm", 640, 480);
+        meteors.update(0.1f, collider);
+        assert(meteors.size() == 0 && meteors.impacts().size() == 1);
+        assert(glm::length(meteors.impacts()[0].position
+            - (collider.center + glm::vec3(0, 0, collider.radius))) < 0.0001f);
+        drawContact();
+        assert(pixels() == baseline); // Actual disappearance at contact, without effects.
+        capture("/tmp/impact-removed.ppm", 640, 480);
     } // All these GPU resources are released while the context is alive.
     assert(glGetError() == GL_NO_ERROR);
     app.shutdown();
@@ -290,5 +360,5 @@ int main()
     std::filesystem::remove_all(empty);
     assert(app.init());
     app.run(3);
-    std::cout << "Application lifecycle, cinematic shower and image replay checks passed\n";
+    std::cout << "Application lifecycle, continuous impacts and cinematic image replay checks passed\n";
 } // Application destructor also releases resources before GLFW.

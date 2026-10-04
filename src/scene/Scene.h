@@ -39,4 +39,11 @@ public:
     {
         return objects.size();
     }
+
+    const SceneObject* findObject(const std::string& name) const
+    {
+        for (const auto& object : objects)
+            if (object.name == name) return &object;
+        return nullptr;
+    }
 };

@@ -43,10 +43,11 @@ int main()
     assert(timeline.getTime() == 30);
     assert(!shower.isRunning()); // One large step crosses start and stop in order.
 
+    const SphereCollider collider{earth.transform.position, earth.transform.scale.x};
     auto step = [&]()
     {
         timeline.update(0.25f);
-        system.update(0.25f);
+        system.update(0.25f, collider);
         shower.update(0.25f);
     };
     MainSequence::reset(timeline, shower, system);
@@ -55,10 +56,14 @@ int main()
     timeline.play();
     // Record the complete physical state at each fixed step, then replay it.
     std::vector<std::vector<Meteor>> states;
+    std::vector<std::vector<MeteorImpact>> impacts;
+    std::size_t impactCount = 0;
     for (int frame = 1; frame <= 120; ++frame)
     {
         step();
         states.push_back(system.meteors());
+        impacts.push_back(system.impacts());
+        impactCount += system.impacts().size();
         if (frame < 40) assert(system.size() == 0 && !shower.isRunning());
         if (frame == 40)
         {
@@ -73,7 +78,7 @@ int main()
                 - (born.transform.position + born.velocity * 0.25f)) < 0.0001f);
             assert(system.meteors()[0].lifetime == born.lifetime - 0.25f);
         }
-        if (frame == 60) assert(shower.isRunning() && system.size() > 100);
+        if (frame == 60) assert(shower.isRunning() && system.size() > 0);
         if (frame == 80) assert(!shower.isRunning() && system.size() > 0);
         if (frame == 81)
         {
@@ -82,14 +87,23 @@ int main()
         }
         if (frame >= 108) assert(system.size() == 0 && !shower.isRunning());
     }
+    assert(impactCount > 0);
     for (int pass = 0; pass < 2; ++pass)
     {
         MainSequence::reset(timeline, shower, system);
-        assert(system.size() == 0 && !shower.isRunning() && timeline.getTime() == 0);
+        assert(system.size() == 0 && system.impacts().empty() && !shower.isRunning() && timeline.getTime() == 0);
         timeline.play();
         for (int frame = 0; frame < 120; ++frame)
         {
             step();
+            assert(system.impacts().size() == impacts[frame].size());
+            for (std::size_t i = 0; i < system.impacts().size(); ++i)
+            {
+                const auto& a = system.impacts()[i];
+                const auto& b = impacts[frame][i];
+                assert(a.position == b.position && a.normal == b.normal);
+                assert(a.velocity == b.velocity && a.meteorScale == b.meteorScale);
+            }
             assert(system.size() == states[frame].size());
             for (std::size_t i = 0; i < system.size(); ++i)
             {
@@ -104,7 +118,7 @@ int main()
             MainSequence::reset(timeline, shower, system);
             timeline.play();
             for (int frame = 0; frame < 60; ++frame) step();
-            assert(system.size() > 100); // Next pass also resets halfway through emission.
+            assert(system.size() > 0); // Next pass also resets halfway through emission.
         }
     }
 }

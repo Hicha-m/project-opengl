@@ -27,7 +27,7 @@ COMMON_SRC := \
 
 COMMON_OBJ := $(COMMON_SRC:%.cpp=$(BUILD_DIR)/%.o)
 MAIN_OBJ := $(BUILD_DIR)/$(SCENE).o
-TEST_NAMES := timeline main_sequence meteor_system meteor_shower application
+TEST_NAMES := timeline main_sequence meteor_system meteor_shower meteor_collision application
 TEST_OBJ := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%.o)
 TEST_BIN := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%)
 DEPS := $(COMMON_OBJ:.o=.d) $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
@@ -48,11 +48,12 @@ $(TEST_BIN): $(BUILD_DIR)/tests/%: $(BUILD_DIR)/tests/%.o $(COMMON_OBJ)
 run: $(TARGET)
 	./$(TARGET)
 
-test: $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence $(BUILD_DIR)/tests/meteor_system $(BUILD_DIR)/tests/meteor_shower
+test: $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence $(BUILD_DIR)/tests/meteor_system $(BUILD_DIR)/tests/meteor_shower $(BUILD_DIR)/tests/meteor_collision
 	./$(BUILD_DIR)/tests/timeline
 	./$(BUILD_DIR)/tests/main_sequence
 	./$(BUILD_DIR)/tests/meteor_system
 	./$(BUILD_DIR)/tests/meteor_shower
+	./$(BUILD_DIR)/tests/meteor_collision
 
 test-sequence: $(BUILD_DIR)/tests/main_sequence
 	./$(BUILD_DIR)/tests/main_sequence

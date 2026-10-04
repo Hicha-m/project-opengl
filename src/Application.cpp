@@ -124,7 +124,7 @@ void Application::update(float deltaTime)
     // Events affect this frame. Existing instances move first; births happen at
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
-    mMeteorSystem.update(deltaTime);
+    mMeteorSystem.update(deltaTime, SceneSetup::earthCollider(mScene, *mResources));
     mMeteorShower.update(deltaTime);
     mDebugTimer += deltaTime;
     if (mDebugTimer >= 1.0)

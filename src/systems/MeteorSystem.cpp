@@ -1,6 +1,7 @@
 #include "systems/MeteorSystem.h"
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include "systems/MeteorResources.h"
 #include "graphics/Renderer.h"
 
@@ -9,6 +10,37 @@ namespace
     bool finite(const glm::vec3& v)
     {
         return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    }
+
+    // Swept unit mesh bounding sphere vs target: first contact on the segment.
+    bool contact(const Meteor& meteor, const glm::dvec3& step,
+        const SphereCollider& collider, double& fraction, glm::vec3& normal)
+    {
+        const glm::dvec3 relative = glm::dvec3(meteor.transform.position) - glm::dvec3(collider.center);
+        const double radius = double(collider.radius)
+            + std::max({meteor.transform.scale.x, meteor.transform.scale.y, meteor.transform.scale.z});
+        fraction = 0;
+        if (glm::dot(relative, relative) > radius * radius)
+        {
+            const double lengthSquared = glm::dot(step, step);
+            const double projection = glm::dot(relative, step);
+            if (lengthSquared == 0 || projection >= 0) return false;
+            const double closestTime = -projection / lengthSquared;
+            const glm::dvec3 closest = relative + step * closestTime;
+            const double distanceSquared = glm::dot(closest, closest);
+            if (distanceSquared > radius * radius) return false;
+            fraction = closestTime - std::sqrt((radius * radius - distanceSquared) / lengthSquared);
+            if (fraction < 0 || fraction > 1) return false;
+        }
+        glm::dvec3 outward = relative + step * fraction;
+        if (glm::dot(outward, outward) == 0)
+        {
+            // Initial overlap at target center: opposite motion, or +Y if stationary.
+            outward = -glm::dvec3(meteor.velocity);
+            if (glm::dot(outward, outward) == 0) outward = glm::dvec3(0, 1, 0);
+        }
+        normal = glm::vec3(glm::normalize(outward));
+        return true;
     }
 }
 
@@ -27,10 +59,35 @@ bool MeteorSystem::spawn(const Transform& transform, const glm::vec3& velocity, 
 
 void MeteorSystem::update(float deltaTime)
 {
+    simulate(deltaTime, nullptr);
+}
+
+void MeteorSystem::update(float deltaTime, const SphereCollider& collider)
+{
+    simulate(deltaTime, &collider);
+}
+
+void MeteorSystem::simulate(float deltaTime, const SphereCollider* collider)
+{
+    mImpacts.clear();
     if (!std::isfinite(deltaTime) || deltaTime <= 0) return;
+    if (collider && !collider->isValid()) throw std::invalid_argument("Invalid sphere collider");
     for (auto& meteor : mMeteors)
     {
-        meteor.transform.position += meteor.velocity * std::min(deltaTime, meteor.lifetime);
+        const double duration = std::min(deltaTime, meteor.lifetime);
+        const glm::dvec3 step = glm::dvec3(meteor.velocity) * duration;
+        double fraction;
+        glm::vec3 normal;
+        if (collider && contact(meteor, step, *collider, fraction, normal)
+            && duration * fraction < meteor.lifetime) // Expiry wins an exact tie.
+        {
+            mImpacts.push_back({collider->center + normal * collider->radius, normal,
+                meteor.velocity, std::max({meteor.transform.scale.x,
+                    meteor.transform.scale.y, meteor.transform.scale.z})});
+            meteor.lifetime = 0;
+            continue;
+        }
+        meteor.transform.position += glm::vec3(step);
         meteor.lifetime -= deltaTime;
     }
     mMeteors.erase(std::remove_if(mMeteors.begin(), mMeteors.end(),
@@ -40,6 +97,7 @@ void MeteorSystem::update(float deltaTime)
 void MeteorSystem::clear()
 {
     mMeteors.clear();
+    mImpacts.clear();
 }
 
 bool MeteorSystem::initGraphics()

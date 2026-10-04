@@ -8,6 +8,7 @@ Sphere::Sphere(
     unsigned int segments,
     unsigned int rings
 )
+    : mRadius(radius)
 {
     generateMesh(
         radius,

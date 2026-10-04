@@ -1,4 +1,5 @@
 #include "scene/SceneSetup.h"
+#include <stdexcept>
 
 namespace
 {
@@ -81,4 +82,15 @@ void SceneSetup::update(Scene& scene, const glm::vec3& cameraPosition)
 {
     if (auto* stars = scene.findObject("Stars"))
         stars->transform.position = cameraPosition;
+}
+
+SphereCollider SceneSetup::earthCollider(const Scene& scene, const SceneResources& resources)
+{
+    const auto* earth = scene.findObject("Earth");
+    if (!earth) throw std::invalid_argument("Earth collider requires Earth");
+    const auto& scale = earth->transform.scale;
+    SphereCollider collider{earth->transform.position, resources.earthSphere.getRadius() * scale.x};
+    if (!collider.isValid() || scale.x <= 0 || scale.x != scale.y || scale.x != scale.z)
+        throw std::invalid_argument("Earth collider requires a positive uniform scale");
+    return collider;
 }
