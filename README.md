@@ -17,7 +17,8 @@ projet/
 │   │   ├── ShaderProgram.h / ShaderProgram.cpp
 │   │   ├── Texture2D.h / Texture2D.cpp
 │   │   ├── Renderer.h / Renderer.cpp
-│   │   └── ParticleRenderer.h / ParticleRenderer.cpp
+│   │   ├── ParticleRenderer.h / ParticleRenderer.cpp
+│   │   └── HDRPipeline.h / HDRPipeline.cpp
 │   ├── geometry/
 │   │   ├── Sphere.h / Sphere.cpp
 │   │   └── SphereCollider.h
@@ -47,6 +48,7 @@ projet/
 │   │   ├── MeteorShower.h / MeteorShower.cpp
 │   │   ├── MeteorTrailEmitter.h / MeteorTrailEmitter.cpp
 │   │   ├── EarthDamageSystem.h / EarthDamageSystem.cpp
+│   │   ├── EarthBreakupSystem.h / EarthBreakupSystem.cpp
 │   │   ├── Particle.h
 │   │   ├── ParticleSystem.h / ParticleSystem.cpp
 │   │   ├── ParticleEmitter.h / ParticleEmitter.cpp
@@ -61,6 +63,7 @@ projet/
 │   ├── meteor_system.cpp
 │   ├── meteor_shower.cpp
 │   ├── meteor_collision.cpp
+│   ├── earth_breakup.cpp
 │   ├── destruction_level.cpp
 │   ├── earth_damage.cpp
 │   ├── meteor_trail.cpp
@@ -113,6 +116,9 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `systems/ImpactLightSystem` | Consomme les impacts sans connaître la Terre ni MeteorSystem. Crée les flashes, les fait décroître et publie les lumières temporaires au LightManager. |
 | `systems/MeteorTrailEmitter` | Observe les météores en lecture seule, échantillonne leurs segments par distance et émet dans ParticleSystem ; état et RNG par MeteorId. |
 | `tests/meteor_trail.cpp` | Vérifie densité à 30/60/144 FPS, grandes frames, vieillissement dans la frame, suppressions, réallocations et replay. |
+| `graphics/HDRPipeline` | Rend la scène dans une texture RGBA16F, extrait les sources lumineuses, floute le bloom à demi-résolution et compose une image avec tone mapping. |
+| `systems/EarthBreakupSystem` | Prépare 32 morceaux de croûte, capture la pose terrestre à la rupture, simule leur mouvement déterministe et rend un noyau émissif avec sa lumière. |
+| `tests/earth_breakup.cpp` | Vérifie le seuil, la pose capturée, le mouvement, le reset, le replay, la lumière du noyau et la destruction atteinte par la pluie existante. |
 | `systems/EarthDamageSystem` | Consomme les impacts, transforme leurs positions monde en UV locales et accumule les dégâts permanents et la chaleur temporaire dans deux cartes CPU. Refroidit la chaleur et envoie les cartes modifiées aux textures terrestres. |
 | `tests/destruction_level.cpp` | Vérifie les contributions de petits/gros impacts, vitesse, accumulation, bornes, entrées invalides, indépendance du refroidissement et replay du niveau global. |
 | `tests/earth_damage.cpp` | Vérifie UV, rotation, accumulation, saturation, couture, pôles, refroidissement et replay sans contexte OpenGL. |
@@ -142,7 +148,8 @@ qui calcule la couleur des fragments :
 
 - `earth.vert` / `earth.frag` : Terre, éclairage jour/nuit, normal map et spéculaire.
 - `clouds.vert` / `clouds.frag` : couche de nuages avec transparence et éclairage.
-- `sun.vert` / `sun.frag` : surface lumineuse du Soleil.
+- `sun.vert` / `sun.frag` : surface lumineuse du Soleil, émission HDR configurable
+  par son matériau (1 par défaut), avec halo produit par le bloom commun.
 - `stars.vert` / `stars.frag` : fond étoilé.
 - `particle.vert` / `particle.frag` : billboards instanciés lumineux avec disparition progressive.
 - `meteor.vert` / `meteor.frag` : roche texturée avec éclairage directionnel et ambiant.
@@ -176,7 +183,7 @@ intenses sont envoyées au GPU ; les autres continuent de vieillir sur le CPU.
 `R` vide aussi les flashes et leur publication dans `LightManager`. Les lumières
 permanentes restent présentes. `R` vide les particules et réinitialise aussi
 le RNG de leur émetteur ainsi que les états de traînée et les identifiants des
-météores. Il n'y a à cette phase ni bloom, ni cratère. Captures du test de contact : `/tmp/impact-flash-peak.ppm`,
+météores. Il n'y a à cette phase aucun cratère géométrique. Captures du test de contact : `/tmp/impact-flash-peak.ppm`,
 `/tmp/impact-flash-faded.ppm` et `/tmp/impact-flash-expired.ppm`.
 
 Chaque impact émet 48 fragments orangés à `impact.position + normal * 0.12`.
@@ -261,8 +268,8 @@ utilisent les mêmes règles de wrapping et de filtrage.
 Le shader ajoute l'émission thermique après l'éclairage et les dégâts. La
 palette va du rouge au bord vers orange, jaune puis blanc-jaune au centre le
 plus chaud. L'émission reste visible côté nuit sans Soleil ni flash ponctuel.
-Les valeurs lumineuses dépassent 1 dans le shader et sont limitées par le
-framebuffer actuel ; aucun pipeline HDR ou bloom n'est ajouté à cette phase.
+Les valeurs lumineuses dépassent 1 dans le shader. Depuis 4.8.5, elles sont
+conservées par la cible HDR et alimentent également le bloom.
 Après refroidissement, seule la marque brûlée persiste.
 
 `R` efface et renvoie les deux cartes au GPU. Les tests CPU vérifient le
@@ -274,19 +281,19 @@ le replay des deux cartes et des images de la cinématique.
 Captures : `/tmp/earth-heat-night-peak.ppm`, `/tmp/earth-heat-night-cooled.ppm`,
 `/tmp/earth-heat-night-reheated.ppm` et `/tmp/earth-heat-cold-burn.ppm`.
 
-La prochaine étape 4.8.5 ajoutera la rupture avec fragments préparés, noyau
-blanc, éclairage du noyau et bloom.
+La phase 4.8.5 ajoute la rupture avec fragments préparés, noyau blanc,
+éclairage du noyau et bloom, décrits plus bas.
 
 ## Niveau de destruction global — phase 4.8.3
 
 `EarthDamageSystem::destructionLevel()` expose un état normalisé entre 0 et 1,
 initialement nul, cumulatif et monotone jusqu'au reset. Chaque impact accepté
 par le mapping et doté d'une vitesse finie contribue selon une approximation
-simple d'énergie : `meteorScale³ * dot(velocity, velocity) / 1000`.
+simple d'énergie : `meteorScale³ * dot(velocity, velocity) / 450`.
 Le cube de la taille représente une masse relative ; le carré de la vitesse
 représente l'énergie relative. Doubler la taille multiplie la contribution par
 8, doubler la vitesse la multiplie par 4. Un impact immobile ne contribue pas
-au niveau global. Le budget `DestructionEnergyBudget = 1000` est un paramètre
+au niveau global. Le budget `DestructionEnergyBudget = 450` est un paramètre
 cinématique, sans prétention de simulation géologique.
 
 L'accumulation se fait en double précision et sature à 1. Elle ne dépend ni
@@ -314,8 +321,8 @@ chaque rendu. Le matériau démarre à zéro et le reset de `EarthDamageSystem`
 ramène aussi le signal des fissures à zéro au rendu suivant. Le système de
 dégâts reste indépendant de l'effet graphique.
 
-Le shader évalue un réseau cellulaire 3D sur la position locale normalisée
-de la sphère (fréquence 8). Les frontières entre cellules forment les fissures.
+Le shader évalue un réseau cellulaire 3D sur la direction sphérique locale
+reconstruite depuis les UV (fréquence 8). Les frontières entre cellules forment les fissures.
 Le motif est déterministe et ne dépend ni du temps ni des coordonnées monde ;
 il reste donc attaché à la croûte pendant la rotation, sans couture U ni
 singularité aux pôles. Aucune texture de fissures supplémentaire n'est requise.
@@ -328,9 +335,8 @@ La palette passe de rouge/orange à jaune-blanc, avec une émission croissante
 ajoutée après l'éclairage. Les crevasses restent visibles côté nuit ; les dégâts
 permanents et la chaleur temporaire continuent de fonctionner ensemble.
 
-La géométrie reste intacte : aucun déplacement de sommet, séparation de
-morceaux ou bloom dans cette phase. L'émission forte est limitée par le
-framebuffer actuel, comme l'incandescence des impacts.
+La phase 4.8.4 garde la géométrie intacte. Depuis 4.8.5, les fissures, les
+impacts et le noyau peuvent alimenter le pipeline HDR et son bloom.
 
 Le test OpenGL vérifie l'absence initiale de fissures, l'augmentation de leur
 surface et de leur luminosité à 0,2/0,5/0,8/0,95, l'intérieur jaune-blanc sans
@@ -342,6 +348,80 @@ Captures : `/tmp/earth-cracks-20.ppm`, `/tmp/earth-cracks-50.ppm`,
 `/tmp/earth-cracks-80.ppm`, `/tmp/earth-cracks-95.ppm` et
 `/tmp/earth-cracks-local.ppm`.
 
+## Rupture finale, noyau et bloom — phase 4.8.5
+
+`EarthBreakupSystem` prépare la croûte lors du chargement : les triangles de
+la sphère terrestre 32 × 32 sont répartis en 32 patches (8 secteurs × 4 bandes).
+Chaque morceau conserve exactement les triangles et UV extérieurs d'origine,
+possède une coque intérieure à 72 % du rayon et des parois radiales fermant
+ses bords. Les meshes sont construits une seule fois avant l'animation ; aucune
+fracture dynamique n'est calculée au moment de la rupture.
+
+Quand `destructionLevel >= 0.95`, le système capture la transformation de la
+Terre, place tous les morceaux dans cette pose et verrouille son état actif.
+La première frame reconstitue la sphère ; les suivantes déplacent les morceaux
+vers l'extérieur à 6–10 unités/s et les font tourner. La seed 485 fixe les
+vitesses et rotations. La transformation capturée ne suit plus les rotations
+de la Timeline. La caméra continue son mouvement normalement.
+
+`Application` masque alors la Terre et les nuages d'origine, puis dessine les
+fragments. Les dégâts, la chaleur et les fissures restent attachés aux UV de
+leurs faces extérieures. Les faces intérieures utilisent un matériau rocheux
+avec éclairage dédié. Le système ne connaît ni météores ni impacts : il reçoit
+seulement le niveau global et la transformation terrestre. Le collider des
+météores reste l'approximation sphérique d'origine ; aucune collision physique
+avec les fragments n'est ajoutée.
+
+Un noyau distinct de rayon local 0,55 reste au centre. Son shader émet à une
+intensité HDR de 20, avec centre blanc et périphérie jaune/orange. Une lumière
+ponctuelle de puissance 450, publiée après les flashes dans les lumières
+temporaires, éclaire les faces exposées des morceaux. La sélection des lumières
+GPU conserve le noyau parmi les plus intenses. Les lumières permanentes ne
+sont pas dupliquées ou remplacées.
+
+Le budget cinématique de destruction est désormais 450 : les impacts de la
+pluie existante atteignent ainsi le seuil de rupture en fin de bombardement
+(avec le budget précédent de 1 000, le niveau final restait proche de 0,486).
+Le seuil reste centralisé dans `EarthBreakupSystem::Threshold`. Le réglage fin
+de la caméra et du rythme relève encore de la phase 4.9.
+
+`HDRPipeline` rend toute la scène dans une cible RGBA16F avec profondeur,
+extrait les valeurs lumineuses au-dessus de 1, applique huit passes de flou
+séparable à demi-résolution et combine le halo à une force de 0,12. La
+composition préserve les couleurs ordinaires jusqu’à 0,8 et comprime
+progressivement les hautes lumières, sans appliquer une seconde correction
+gamma aux textures existantes. Le
+depth test masque le noyau derrière les morceaux avant le bloom, qui reste
+localisé autour des sources lumineuses. Les buffers sont recréés lors d'un
+changement de taille et libérés avant la destruction du contexte OpenGL.
+
+`R` efface les états de rupture et les autres effets, reconstruit la pose de
+séquence et restaure la Terre intacte au rendu suivant. Le pipeline n'utilise
+pas d'accumulation entre frames : aucun halo résiduel ne survit au reset.
+
+Les tests vérifient le mouvement et le replay CPU, la reconstruction de la
+sphère dans le depth buffer à la naissance, les fragments séparés, les valeurs
+HDR supérieures à 10, l'effet réel de la lumière du noyau, le bloom sans
+blanchiment global, le redimensionnement, le reset après rupture dans
+Application et le nettoyage si un shader du noyau ou du bloom manque.
+La cinématique complète est rejouée avec rupture et bloom, avec comparaison
+des images. Captures : `/tmp/earth-breakup-fragments.ppm`,
+`/tmp/earth-breakup-bloom.ppm` et `/tmp/earth-breakup-core-exposed.ppm`.
+
+Le Soleil utilise le même bloom que le noyau, sans géométrie de halo
+supplémentaire. Le paramètre `emission` de son matériau vaut 1 et conserve
+les détails de sa surface ; `bloomEmission = 3` pilote indépendamment une
+source chaude envoyée à une seconde cible RGBA16F. L'extraction combine cette
+source avec les hautes lumières ordinaires, puis utilise le même flou et la
+même composition que le noyau. Les autres objets écrivent zéro dans cette
+cible pour masquer les sources cachées, avec le depth buffer partagé. Cela
+permet de régler le halo solaire séparément de sa surface, sans augmenter le bloom global. Les tests
+OpenGL comparent aussi les couleurs sombres avant/après composition, l'image
+terrestre avec le rendu précédent, et le halo solaire avec/sans bloom. Les
+captures de comparaison sont `/tmp/earth-color-legacy.ppm`,
+`/tmp/earth-color-corrected.ppm`, `/tmp/sun-without-halo.ppm` et
+`/tmp/sun-with-halo.ppm`.
+
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
 nécessaire, `SceneResources`. Pour changer le fonctionnement du rendu, modifier
@@ -349,7 +429,7 @@ nécessaire, `SceneResources`. Pour changer le fonctionnement du rendu, modifier
 
 Les ressources GPU sont construites après la création du contexte OpenGL.
 À la fermeture, `Application` libère les pistes, les objets et les ressources
-avant de détruire la fenêtre et de terminer GLFW.
+ainsi que les ressources de rupture et de post-traitement avant de détruire la fenêtre et de terminer GLFW.
 
 ## Compilation et inclusions
 

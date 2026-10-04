@@ -34,7 +34,10 @@ bool Application::init()
         return false;
     }
     mResources = std::make_unique<SceneResources>();
+    mHDR = std::make_unique<HDRPipeline>();
     if (!SceneSetup::build(mScene, mLightManager, *mResources)
+        || !mEarthBreakupSystem.initGraphics(mResources->earthSphere.getMesh())
+        || !mHDR->init(mOptions.width,mOptions.height)
         || !mMeteorSystem.initGraphics()
         || !mParticleSystem.initGraphics()
         || !MainSequence::build(mTimeline, mCinematicCamera, mScene, mMeteorShower))
@@ -135,10 +138,12 @@ void Application::update(float deltaTime)
     mEarthDamageSystem.update(deltaTime);
     mEarthDamageSystem.consume(mMeteorSystem.impacts(), earth->transform, mResources->earthSphere.getRadius());
     mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
+    mEarthBreakupSystem.update(deltaTime,mEarthDamageSystem.destructionLevel(),earth->transform);
     mImpactParticleEmitter.consume(mMeteorSystem.impacts());
     mImpactLightSystem.consume(mMeteorSystem.impacts());
     mImpactLightSystem.update(deltaTime);
     mImpactLightSystem.publish(mLightManager);
+    mEarthBreakupSystem.publish(mLightManager);
     mMeteorShower.update(deltaTime);
     mDebugTimer += deltaTime;
     if (mDebugTimer >= 1.0)
@@ -173,17 +178,21 @@ void Application::updateInput(float deltaTime)
 void Application::render()
 {
     if (mOptions.width <= 0 || mOptions.height <= 0) return;
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (!mHDR->begin(mOptions.width,mOptions.height)) return;
     const Camera& camera = mFPSMode ? static_cast<const Camera&>(mFPSCamera) : mCinematicCamera;
     const auto view = camera.getViewMatrix();
     const auto projection = glm::perspective(glm::radians(camera.getFOV()),
         static_cast<float>(mOptions.width) / mOptions.height, 0.1f, MAX_DISTANCE);
     const auto position = camera.getPosition();
     SceneSetup::update(mScene, position);
+    mScene.findObject("Earth")->visible = !mEarthBreakupSystem.active();
+    mScene.findObject("EarthClouds")->visible = !mEarthBreakupSystem.active();
     mScene.findObject("Earth")->material.setFloat("destructionLevel", mEarthDamageSystem.destructionLevel());
     mRenderer.render(mScene, mLightManager, view, projection, position);
     mMeteorSystem.render(mRenderer, mLightManager, view, projection, position);
+    mEarthBreakupSystem.render(mRenderer,mScene.findObject("Earth")->material,mLightManager,view,projection,position);
     mParticleSystem.render(view, projection);
+    mHDR->finish();
 }
 
 void Application::showFPS(double currentTime)
@@ -257,6 +266,7 @@ void Application::restartSequence()
     mMeteorTrailEmitter.reset();
     mImpactLightSystem.publish(mLightManager);
     mEarthDamageSystem.clear();
+    mEarthBreakupSystem.reset();
     mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
     mTimeline.play();
     mDebugTimer = 0;
@@ -279,10 +289,13 @@ void Application::shutdown()
     mParticleSystem.clear();
     mImpactParticleEmitter.reset();
     mMeteorTrailEmitter.reset();
+    mEarthBreakupSystem.releaseGraphics();
+    mHDR.reset();
     mMeteorSystem.releaseGraphics();
     mParticleSystem.releaseGraphics();
     mScene.objects.clear();
     mEarthDamageSystem.clear();
+    mEarthBreakupSystem.reset();
     mResources.reset(); // GPU destructors require the current context.
     mLightManager = LightManager{};
     if (mWindow) glfwDestroyWindow(mWindow);

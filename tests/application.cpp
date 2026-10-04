@@ -466,6 +466,142 @@ static void checkEarthCracks()
     assert(glGetError() == GL_NO_ERROR);
 }
 
+static void checkEarthBreakup()
+{
+    SceneResources resources; Scene scene; LightManager lights; Renderer renderer;
+    assert(SceneSetup::build(scene,lights,resources));
+    auto* earth=scene.findObject("Earth");
+    EarthBreakupSystem breakup; assert(breakup.initGraphics(resources.earthSphere.getMesh()));
+    assert(breakup.initGraphics(resources.earthSphere.getMesh()));
+    HDRPipeline hdr; assert(hdr.init(640,480));
+    const auto eye=earth->transform.position+glm::vec3(0,0,45);
+    const auto view=glm::lookAt(eye,earth->transform.position,glm::vec3(0,1,0));
+    const auto projection=glm::ortho(-24.0f,24.0f,-18.0f,18.0f,0.1f,150.0f);
+    auto draw=[&](bool post, bool bloom=true) {
+        if(post) assert(hdr.begin(640,480));
+        else glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+        if(breakup.active()) breakup.render(renderer,earth->material,lights,view,projection,eye);
+        else renderer.renderMesh(*earth->mesh,earth->material,earth->transform,lights,view,projection,eye);
+        if(post) hdr.finish(bloom);
+        return pixels();
+    };
+    const auto baseline=draw(false);
+    std::vector<float> baselineDepth(640*480), fragmentDepth(640*480);
+    glReadPixels(0,0,640,480,GL_DEPTH_COMPONENT,GL_FLOAT,baselineDepth.data());
+    std::vector<unsigned char> replay;
+    for(int pass=0;pass<2;++pass) {
+        breakup.reset(); lights.setTransientPointLights({});
+        assert(draw(false)==baseline);
+        breakup.update(0.1f,1,earth->transform);
+        draw(false); glReadPixels(0,0,640,480,GL_DEPTH_COMPONENT,GL_FLOAT,fragmentDepth.data());
+        // At birth, all exterior triangles reconstruct the existing sphere.
+        double depthError=0;
+        for(std::size_t i=0;i<baselineDepth.size();++i) depthError+=std::abs(baselineDepth[i]-fragmentDepth[i]);
+        assert(depthError/baselineDepth.size()<0.00001);
+        breakup.publish(lights);
+        breakup.update(1.5f,1,earth->transform);
+        const auto separated=draw(false); assert(separated!=baseline);
+        if(!pass) capture("/tmp/earth-breakup-fragments.ppm",640,480);
+        // Read HDR before composition: the core retains true values above one.
+        assert(hdr.begin(640,480));
+        breakup.render(renderer,earth->material,lights,view,projection,eye);
+        std::vector<float> raw(640*480*3);
+        glReadPixels(0,0,640,480,GL_RGB,GL_FLOAT,raw.data());
+        assert(*std::max_element(raw.begin(),raw.end())>10);
+        hdr.finish(false); const auto noBloom=pixels();
+        const auto withBloom=draw(true,true); assert(withBloom!=noBloom);
+        long gain=0; std::size_t bright=0;
+        for(std::size_t i=0;i<withBloom.size();++i) { gain+=int(withBloom[i])-int(noBloom[i]); if(withBloom[i]>245)++bright; }
+        assert(gain>0 && bright<withBloom.size()/2); // Glow does not white out the frame.
+        if(!pass) { replay=withBloom; capture("/tmp/earth-breakup-bloom.ppm",640,480); }
+        else assert(withBloom==replay);
+        // Removing the core light changes actual fragment shading.
+        lights.setTransientPointLights({}); const auto unlit=draw(true);
+        assert(unlit!=withBloom);
+        breakup.update(1.5f,1,earth->transform); breakup.publish(lights);
+        assert(draw(true)!=withBloom);
+        if(!pass) capture("/tmp/earth-breakup-core-exposed.ppm",640,480);
+    }
+    // Resize the HDR buffers, then restore; all FBOs must remain complete.
+    assert(hdr.begin(320,240)); hdr.finish();
+    breakup.reset(); lights.setTransientPointLights({}); draw(true);
+    breakup.releaseGraphics(); breakup.releaseGraphics(); assert(!breakup.graphicsReady());
+    assert(breakup.initGraphics(resources.earthSphere.getMesh()));
+    assert(glGetError()==GL_NO_ERROR);
+}
+
+static void checkHDRColorAndSun()
+{
+    HDRPipeline hdr; assert(hdr.init(640,480));
+    GLfloat previousClear[4]; glGetFloatv(GL_COLOR_CLEAR_VALUE,previousClear);
+    // Regression: ordinary display colors must survive post-processing without
+    // the gamma lift that previously turned a dark background grey.
+    for(const glm::vec3 sample : {glm::vec3(0.02f),glm::vec3(0.06f),glm::vec3(0.1f,0.3f,0.6f)}) {
+        glClearColor(sample.r,sample.g,sample.b,1);
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+        const auto direct=pixels();
+        assert(hdr.begin(640,480)); hdr.finish(false);
+        const auto composed=pixels();
+        for(std::size_t i=0;i<direct.size();++i) assert(std::abs(int(direct[i])-int(composed[i]))<=1);
+    }
+    SceneResources resources; Scene scene; LightManager lights; Renderer renderer;
+    assert(SceneSetup::build(scene,lights,resources));
+    auto* earth=scene.findObject("Earth");
+    auto eye=earth->transform.position+glm::vec3(0,0,30);
+    auto view=glm::lookAt(eye,earth->transform.position,glm::vec3(0,1,0));
+    auto projection=glm::ortho(-13.0f,13.0f,-9.75f,9.75f,0.1f,100.0f);
+    glClearColor(0,0,0,1); glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+    renderer.renderMesh(*earth->mesh,earth->material,earth->transform,lights,view,projection,eye);
+    const auto legacy=pixels(); capture("/tmp/earth-color-legacy.ppm",640,480);
+    assert(hdr.begin(640,480));
+    renderer.renderMesh(*earth->mesh,earth->material,earth->transform,lights,view,projection,eye);
+    hdr.finish(false); const auto corrected=pixels();
+    capture("/tmp/earth-color-corrected.ppm",640,480);
+    double difference=0;
+    for(std::size_t i=0;i<legacy.size();++i) difference+=std::abs(int(legacy[i])-int(corrected[i]));
+    assert(difference/legacy.size()<2); // Legacy Earth appearance, gentle highlight compression.
+    auto* sun=scene.findObject("Sun");
+    eye=sun->transform.position+glm::vec3(0,0,180);
+    view=glm::lookAt(eye,sun->transform.position,glm::vec3(0,1,0));
+    projection=glm::ortho(-85.0f,85.0f,-63.75f,63.75f,0.1f,300.0f);
+    auto draw=[&](bool bloom) {
+        assert(hdr.begin(640,480));
+        renderer.renderMesh(*sun->mesh,sun->material,sun->transform,lights,view,projection,eye);
+        hdr.finish(bloom); return pixels();
+    };
+    const auto without=draw(false); capture("/tmp/sun-without-halo.ppm",640,480);
+    const auto with=draw(true); capture("/tmp/sun-with-halo.ppm",640,480);
+    const float solarBloom=sun->material.floatUniforms.at("bloomEmission");
+    sun->material.setFloat("bloomEmission",0);
+    assert(draw(false)==without); // Halo strength never changes the visible solar surface.
+    const auto ordinaryBloom=draw(true);
+    sun->material.setFloat("bloomEmission",solarBloom);
+    long extraHalo=0;
+    for(std::size_t i=0;i<with.size();++i) extraHalo+=int(with[i])-int(ordinaryBloom[i]);
+    assert(extraHalo>0); // Separate source adds glow at the configured solar intensity.
+    std::size_t haloPixels=0; long gain=0;
+    for(std::size_t i=0;i<with.size();i+=3) {
+        gain+=int(with[i])+int(with[i+1])+int(with[i+2])-int(without[i])-int(without[i+1])-int(without[i+2]);
+        if(without[i]==0 && without[i+1]==0 && without[i+2]==0 && int(with[i])+int(with[i+1])+int(with[i+2])>10) ++haloPixels;
+    }
+    assert(gain>0 && haloPixels>100);
+    assert(with[0]==0 && with[1]==0 && with[2]==0); // Halo remains local, background stays black.
+    assert(draw(true)==with); // No temporal glow history or nondeterminism.
+    // A foreground object masks the separate source using the shared depth buffer.
+    const auto originalEarth=earth->transform;
+    earth->transform.position=sun->transform.position+glm::vec3(0,0,70);
+    assert(hdr.begin(640,480));
+    renderer.renderMesh(*sun->mesh,sun->material,sun->transform,lights,view,projection,eye);
+    renderer.renderMesh(*earth->mesh,earth->material,earth->transform,lights,view,projection,eye);
+    glReadBuffer(GL_COLOR_ATTACHMENT1);
+    GLfloat occluded[3]; glReadPixels(320,240,1,1,GL_RGB,GL_FLOAT,occluded);
+    assert(occluded[0]==0 && occluded[1]==0 && occluded[2]==0);
+    glReadBuffer(GL_COLOR_ATTACHMENT0); hdr.finish();
+    earth->transform=originalEarth;
+    glClearColor(previousClear[0],previousClear[1],previousClear[2],previousClear[3]);
+    assert(glGetError()==GL_NO_ERROR);
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -486,6 +622,8 @@ int main()
     checkEarthDamage();
     checkEarthHeat();
     checkEarthCracks();
+    checkEarthBreakup();
+    checkHDRColorAndSun();
     Transform meteor;
     meteor.position = {30, 50, 15};
     meteor.scale = glm::vec3(0.5f);
@@ -508,11 +646,20 @@ int main()
     assert(app.meteors().size() == 0);
     assert(app.impactLights().lights().empty());
     assert(app.particles().size() == 0);
-    assert(app.earthDamage().destructionLevel() == 0);
+    assert(app.earthDamage().destructionLevel() == 0 && !app.earthBreakup().active());
     for (float value : app.earthDamage().pixels()) assert(value == 0);
     for (float value : app.earthDamage().heatPixels()) assert(value == 0);
     app.run(3);
     assert(app.meteors().size() == 0);
+    Transform catastrophic;
+    catastrophic.position={30,50,10.4f}; catastrophic.scale=glm::vec3(1);
+    assert(app.meteors().spawn(catastrophic,{0,0,-100},5));
+    app.run(1);
+    assert(app.earthBreakup().active() && app.earthDamage().destructionLevel()==1);
+    app.run(3);
+    app.restartSequence();
+    assert(!app.earthBreakup().active() && app.earthDamage().destructionLevel()==0);
+    app.run(1);
     {
         // Exercise the extracted content independently, with the same real context.
         SceneResources resources;
@@ -545,6 +692,9 @@ int main()
         ImpactParticleEmitter particleEmitter(particles);
         MeteorTrailEmitter trails(particles);
         EarthDamageSystem damage;
+        EarthBreakupSystem breakup;
+        assert(breakup.initGraphics(resources.earthSphere.getMesh()));
+        HDRPipeline hdr; assert(hdr.init(640,480));
         assert(particles.initGraphics());
         MeteorShower shower(meteors);
         assert(meteors.initGraphics());
@@ -563,6 +713,7 @@ int main()
         {
             MainSequence::reset(timeline, shower, meteors);
             flashes.clear();
+            breakup.reset(); scene.findObject("Earth")->visible=true; scene.findObject("EarthClouds")->visible=true;
             damage.clear(); assert(damage.destructionLevel() == 0); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
             particles.clear(); particleEmitter.reset(); trails.reset();
             flashes.publish(lights);
@@ -582,10 +733,12 @@ int main()
                     damage.update(0.25f);
                     damage.consume(meteors.impacts(),scene.findObject("Earth")->transform);
                     assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
+                    breakup.update(0.25f,damage.destructionLevel(),scene.findObject("Earth")->transform);
                     particleEmitter.consume(meteors.impacts());
                     flashes.consume(meteors.impacts());
                     flashes.update(0.25f);
                     flashes.publish(lights);
+                    breakup.publish(lights);
                     shower.update(0.25f);
                 }
                 assert(damage.destructionLevel() >= previousDestruction && damage.destructionLevel() <= 1);
@@ -645,10 +798,12 @@ int main()
                 if (imageIndex >= 6 || frame != frames[imageIndex]) continue;
                 SceneSetup::update(scene, camera.getPosition());
                 assert(scene.findObject("Stars")->transform.position == camera.getPosition());
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                assert(hdr.begin(640,480));
                 const auto view = camera.getViewMatrix();
                 const auto projection = glm::perspective(glm::radians(camera.getFOV()),
                     640.0f / 480, 0.1f, 100000000.0f);
+                scene.findObject("Earth")->visible=!breakup.active();
+                scene.findObject("EarthClouds")->visible=!breakup.active();
                 scene.findObject("Earth")->material.setFloat("destructionLevel", damage.destructionLevel());
                 renderer.render(scene, lights, view, projection, camera.getPosition());
                 const auto withoutMeteors = pixels();
@@ -656,7 +811,9 @@ int main()
                 const auto rendered = pixels();
                 if (meteors.size() > 0) assert(rendered != withoutMeteors);
                 else assert(rendered == withoutMeteors);
+                breakup.render(renderer,scene.findObject("Earth")->material,lights,view,projection,camera.getPosition());
                 particles.render(view, projection);
+                hdr.finish();
                 const auto withParticles = pixels();
                 if (pass == 0)
                 {
@@ -667,8 +824,9 @@ int main()
                 ++imageIndex;
             }
             assert(imageIndex == 6 && !timeline.isPlaying() && timeline.getTime() == 30);
-            assert(impactCount > 0 && damage.destructionLevel() > 0);
+            assert(impactCount > 0 && damage.destructionLevel() > 0 && breakup.active());
         }
+        breakup.reset(); scene.findObject("Earth")->visible=true; scene.findObject("EarthClouds")->visible=true;
         damage.clear(); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
         scene.findObject("Earth")->material.setFloat("destructionLevel", 0.0f);
         // Controlled visible contact in front of the rendered Earth.
@@ -763,7 +921,7 @@ int main()
     assert(app.meteors().size() == 0 && !app.meteors().graphicsReady());
     assert(app.impactLights().lights().empty());
     assert(app.particles().size() == 0);
-    assert(app.earthDamage().destructionLevel() == 0);
+    assert(app.earthDamage().destructionLevel() == 0 && !app.earthBreakup().active());
     for (float value : app.earthDamage().pixels()) assert(value == 0);
     for (float value : app.earthDamage().heatPixels()) assert(value == 0);
     assert(glfwGetCurrentContext() == nullptr);
@@ -800,9 +958,16 @@ int main()
     assert(!app.init());
     assert(glfwGetCurrentContext() == nullptr);
     assert(!app.particles().graphicsReady() && !app.meteors().graphicsReady());
+    // Missing breakup and post-processing shaders must also clean partial resources.
+    std::filesystem::create_symlink(original / "shaders/particle.frag", empty / "shaders/particle.frag");
+    std::filesystem::remove(empty / "shaders/core.frag");
+    assert(!app.init() && glfwGetCurrentContext()==nullptr && !app.earthBreakup().graphicsReady());
+    std::filesystem::create_symlink(original / "shaders/core.frag", empty / "shaders/core.frag");
+    std::filesystem::remove(empty / "shaders/bright.frag");
+    assert(!app.init() && glfwGetCurrentContext()==nullptr && !app.earthBreakup().graphicsReady());
     std::filesystem::current_path(original);
     std::filesystem::remove_all(empty);
     assert(app.init());
     app.run(3);
-    std::cout << "Application lifecycle, Earth burn/heat, meteor trails and cinematic image replay checks passed\n";
+    std::cout << "Application lifecycle, Earth breakup, HDR bloom and cinematic image replay checks passed\n";
 } // Application destructor also releases resources before GLFW.

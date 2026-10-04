@@ -17,7 +17,7 @@ public:
     void clear();
     // Kinetic-energy proxy: scale cubed (mass) times speed squared.
     // Cinematic normalization, not a geological energy model.
-    static constexpr double DestructionEnergyBudget = 1000.0;
+    static constexpr double DestructionEnergyBudget = 450.0;
     float destructionLevel() const { return float(mDestructionLevel); }
     const std::vector<float>& pixels() const { return mPixels; }
     const std::vector<float>& heatPixels() const { return mHeat; }

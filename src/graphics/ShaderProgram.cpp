@@ -22,7 +22,12 @@ ShaderProgram::ShaderProgram()
 ShaderProgram::~ShaderProgram()
 {
 	// Delete the program
-	glDeleteProgram(mHandle);
+    if (mHandle) {
+        GLint current = 0;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &current);
+        if (GLuint(current) == mHandle) glUseProgram(0);
+        glDeleteProgram(mHandle);
+    }
 }
 
 //-----------------------------------------------------------------------------

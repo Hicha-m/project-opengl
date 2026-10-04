@@ -29,7 +29,7 @@ int main()
 
     // Repeated strikes keep progressing even on an already saturated burn patch.
     damage.clear();
-    MeteorImpact medium{{0,0,1},{0,0,1},{0,0,-10},1};
+    MeteorImpact medium{{0,0,1},{0,0,1},{0,0,-float(std::sqrt(EarthDamageSystem::DestructionEnergyBudget*0.1))},1};
     for (int hit = 0; hit < 12; ++hit) {
         const float before = damage.destructionLevel();
         damage.consume({medium},earth);

@@ -63,6 +63,8 @@ bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources&
     sunObject.transform.position = glm::vec3(100.0f, 200.0f, 0.0f);
     sunObject.transform.scale = glm::vec3(50.0f);
     sunObject.material.addTexture("sunMap",&resources.sunTexture,0);
+    sunObject.material.setFloat("emission", 1.0f);
+    sunObject.material.setFloat("bloomEmission", 3.0f);
     sunObject.material.receivesLighting = false;
     scene.addObject(sunObject);
 

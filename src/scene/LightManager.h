@@ -39,6 +39,7 @@ public:
     // Must match MAX_POINT_LIGHTS in earth.frag.
     static constexpr std::size_t MaxPointLights = 32;
 
+    const std::vector<PointLight>& transientPointLights() const { return mTransientPointLights; }
     void setTransientPointLights(const std::vector<PointLight>& lights);
     // Highest intensity first; equal intensities retain insertion order.
     std::vector<PointLight> shaderPointLights() const;

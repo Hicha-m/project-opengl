@@ -3,14 +3,14 @@
 #define MAX_POINT_LIGHTS 32
 
 in vec3 FragPos;
-in vec3 LocalPosition;
 in vec3 Normal;
 in vec2 TexCoord;
 
 in vec3 Tangent;
 in vec3 Bitangent;
 
-out vec4 frag_color;
+layout(location=0) out vec4 frag_color;
+layout(location=1) out vec4 bloomSource;
 
 // --------------------------------------------------
 // Earth textures
@@ -77,7 +77,9 @@ vec3 crackHash(vec3 cell)
 float crustCracks(float level, float nearbyDamage)
 {
     if (level <= 0.001) return 0.0;
-    vec3 p = normalize(LocalPosition) * 8.0;
+    float phi = (1.0 - TexCoord.y) * 3.14159265359;
+    float theta = TexCoord.x * 6.28318530718;
+    vec3 p = vec3(sin(phi)*cos(theta), cos(phi), sin(phi)*sin(theta)) * 8.0;
     vec3 cell = floor(p);
     vec3 local = fract(p);
     float nearest = 100.0, second = 100.0;
@@ -107,6 +109,7 @@ float crustCracks(float level, float nearbyDamage)
 
 void main()
 {
+    bloomSource = vec4(0,0,0,1);
     // ------------------------------------------------
     // TBN
     // ------------------------------------------------

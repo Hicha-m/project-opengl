@@ -26,6 +26,7 @@ public:
 
 	bool loadOBJ(const std::string& filename);
 	void draw();
+    const std::vector<Vertex>& vertices() const { return mVertices; }
 
 	// Permet à Sphere de construire directement un Mesh
     void setVertices(

@@ -11,6 +11,7 @@ class SceneObject
 public:
 
     std::string name;
+    bool visible = true;
 
     Transform transform;
 

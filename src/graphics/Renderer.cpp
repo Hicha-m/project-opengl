@@ -32,7 +32,7 @@ void Renderer::renderObject(
     const glm::vec3& cameraPosition
 )
 {
-    if (!object.isValid())
+    if (!object.visible || !object.isValid())
         return;
 
 

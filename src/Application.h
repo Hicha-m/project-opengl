@@ -13,6 +13,8 @@
 #include "systems/ImpactParticleEmitter.h"
 #include "systems/MeteorTrailEmitter.h"
 #include "systems/EarthDamageSystem.h"
+#include "systems/EarthBreakupSystem.h"
+#include "graphics/HDRPipeline.h"
 
 struct GLFWwindow;
 
@@ -38,6 +40,7 @@ public:
     void restartSequence();
     MeteorSystem& meteors() { return mMeteorSystem; }
     ParticleSystem& particles() { return mParticleSystem; }
+    const EarthBreakupSystem& earthBreakup() const { return mEarthBreakupSystem; }
     const EarthDamageSystem& earthDamage() const { return mEarthDamageSystem; }
     const ImpactLightSystem& impactLights() const { return mImpactLightSystem; }
 
@@ -66,6 +69,7 @@ private:
 
     // Reset explicitly in shutdown while the context is still current.
     std::unique_ptr<SceneResources> mResources;
+    std::unique_ptr<HDRPipeline> mHDR;
     Scene mScene;
     Renderer mRenderer;
     LightManager mLightManager;
@@ -78,5 +82,6 @@ private:
     ImpactParticleEmitter mImpactParticleEmitter{mParticleSystem};
     MeteorTrailEmitter mMeteorTrailEmitter{mParticleSystem};
     EarthDamageSystem mEarthDamageSystem;
+    EarthBreakupSystem mEarthBreakupSystem;
     MeteorShower mMeteorShower{mMeteorSystem};
 };

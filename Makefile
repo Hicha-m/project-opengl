@@ -24,6 +24,8 @@ COMMON_SRC := \
 	src/systems/MeteorShower.cpp \
 	src/systems/ImpactLightSystem.cpp \
 	src/systems/EarthDamageSystem.cpp \
+	src/systems/EarthBreakupSystem.cpp \
+	src/graphics/HDRPipeline.cpp \
 	src/systems/ParticleSystem.cpp \
 	src/systems/MeteorTrailEmitter.cpp \
 	src/systems/ParticleEmitter.cpp \
@@ -34,7 +36,7 @@ COMMON_SRC := \
 
 COMMON_OBJ := $(COMMON_SRC:%.cpp=$(BUILD_DIR)/%.o)
 MAIN_OBJ := $(BUILD_DIR)/$(SCENE).o
-TEST_NAMES := timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level application
+TEST_NAMES := timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application
 TEST_OBJ := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%.o)
 TEST_BIN := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%)
 DEPS := $(COMMON_OBJ:.o=.d) $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
@@ -55,7 +57,7 @@ $(TEST_BIN): $(BUILD_DIR)/tests/%: $(BUILD_DIR)/tests/%.o $(COMMON_OBJ)
 run: $(TARGET)
 	./$(TARGET)
 
-test: $(BUILD_DIR)/tests/destruction_level $(BUILD_DIR)/tests/earth_damage $(BUILD_DIR)/tests/meteor_trail $(BUILD_DIR)/tests/particle_system $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence $(BUILD_DIR)/tests/meteor_system $(BUILD_DIR)/tests/meteor_shower $(BUILD_DIR)/tests/meteor_collision $(BUILD_DIR)/tests/impact_light
+test: $(BUILD_DIR)/tests/earth_breakup $(BUILD_DIR)/tests/destruction_level $(BUILD_DIR)/tests/earth_damage $(BUILD_DIR)/tests/meteor_trail $(BUILD_DIR)/tests/particle_system $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence $(BUILD_DIR)/tests/meteor_system $(BUILD_DIR)/tests/meteor_shower $(BUILD_DIR)/tests/meteor_collision $(BUILD_DIR)/tests/impact_light
 	./$(BUILD_DIR)/tests/timeline
 	./$(BUILD_DIR)/tests/main_sequence
 	./$(BUILD_DIR)/tests/meteor_system
@@ -66,6 +68,7 @@ test: $(BUILD_DIR)/tests/destruction_level $(BUILD_DIR)/tests/earth_damage $(BUI
 	./$(BUILD_DIR)/tests/meteor_trail
 	./$(BUILD_DIR)/tests/earth_damage
 	./$(BUILD_DIR)/tests/destruction_level
+	./$(BUILD_DIR)/tests/earth_breakup
 
 test-sequence: $(BUILD_DIR)/tests/main_sequence
 	./$(BUILD_DIR)/tests/main_sequence
