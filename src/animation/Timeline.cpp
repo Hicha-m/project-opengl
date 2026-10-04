@@ -1,105 +1,49 @@
 #include "Timeline.h"
-
 #include <algorithm>
+#include <cmath>
+#include <stdexcept>
 
-
-Timeline::Timeline()
-    : mCurrentTime(0.0f),
-      mDuration(0.0f),
-      mPlaying(false)
+void Timeline::addTrack(std::unique_ptr<TimelineTrack> track)
 {
+    if (!track) throw std::invalid_argument("Null timeline track");
+    track->reset(mCurrentTime);
+    mTracks.push_back(std::move(track));
 }
-
-
-void Timeline::play()
-{
-    mPlaying = true;
-}
-
-
-void Timeline::pause()
-{
-    mPlaying = false;
-}
-
 
 void Timeline::stop()
 {
     mPlaying = false;
-    mCurrentTime = 0.0f;
+    reset();
 }
-
 
 void Timeline::reset()
 {
-    mCurrentTime = 0.0f;
+    mCurrentTime = 0;
+    for (auto& track : mTracks) track->reset(0);
 }
 
-
-void Timeline::update(
-    float deltaTime
-)
+void Timeline::setDuration(float duration)
 {
-    if (!mPlaying)
-        return;
-
-
-    mCurrentTime += deltaTime;
-
-
-    if (mDuration > 0.0f &&
-        mCurrentTime > mDuration)
+    if (!std::isfinite(duration) || duration < 0)
+        throw std::invalid_argument("Invalid timeline duration");
+    mDuration = duration;
+    if (duration > 0 && mCurrentTime > duration)
     {
-        mCurrentTime =
-            mDuration;
+        mCurrentTime = duration;
+        mPlaying = false;
+        for (auto& track : mTracks) track->reset(mCurrentTime);
+    }
+}
 
+void Timeline::update(float deltaTime)
+{
+    if (!mPlaying || !std::isfinite(deltaTime) || deltaTime <= 0) return;
+    const float previous = mCurrentTime;
+    mCurrentTime += deltaTime;
+    if (mDuration > 0 && mCurrentTime >= mDuration)
+    {
+        mCurrentTime = mDuration;
         mPlaying = false;
     }
-
-
-    for (auto& callback : mCallbacks)
-    {
-        callback(
-            mCurrentTime
-        );
-    }
-}
-
-
-float Timeline::getTime() const
-{
-    return mCurrentTime;
-}
-
-
-bool Timeline::isPlaying() const
-{
-    return mPlaying;
-}
-
-
-void Timeline::setDuration(
-    float duration
-)
-{
-    mDuration =
-        std::max(
-            0.0f,
-            duration
-        );
-}
-
-
-float Timeline::getDuration() const
-{
-    return mDuration;
-}
-
-void Timeline::addCallback(
-    std::function<void(float)> callback
-)
-{
-    mCallbacks.push_back(
-        callback
-    );
+    for (auto& track : mTracks) track->update(previous, mCurrentTime);
 }

@@ -1,58 +1,24 @@
 #pragma once
-
+#include <memory>
 #include <vector>
-#include <functional>
-
-#include "AnimationTrack.h"
+#include "TimelineTrack.h"
 
 class Timeline
 {
 public:
-
-    Timeline();
-
-
-    void play();
-
-    void pause();
-
+    void play() { mPlaying = true; }
+    void pause() { mPlaying = false; }
     void stop();
-
     void reset();
-
-
-    void update(
-        float deltaTime
-    );
-
-
-    float getTime() const;
-
-    bool isPlaying() const;
-
-
-    void setDuration(
-        float duration
-    );
-
-
-    float getDuration() const;
-
-    void addCallback(std::function<void(float)> callback
-    
-);
-
-
+    void update(float deltaTime);
+    float getTime() const { return mCurrentTime; }
+    bool isPlaying() const { return mPlaying; }
+    void setDuration(float duration);
+    float getDuration() const { return mDuration; }
+    void addTrack(std::unique_ptr<TimelineTrack> track);
 private:
-
-    float mCurrentTime;
-
-    float mDuration;
-
-    bool mPlaying;
-
-
-    std::vector<
-        std::function<void(float)>
-    > mCallbacks;
+    float mCurrentTime = 0;
+    float mDuration = 0; // zero means unlimited
+    bool mPlaying = false;
+    std::vector<std::unique_ptr<TimelineTrack>> mTracks;
 };
