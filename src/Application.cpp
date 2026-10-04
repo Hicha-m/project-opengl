@@ -126,9 +126,11 @@ void Application::update(float deltaTime)
     // Events affect this frame. Existing instances move first; births happen at
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
+    mMeteorTrailEmitter.observe(mMeteorSystem.meteors());
     mMeteorSystem.update(deltaTime, SceneSetup::earthCollider(mScene, *mResources));
     // Advance existing particles before births, so every burst is visible at age zero.
     mParticleSystem.update(deltaTime);
+    mMeteorTrailEmitter.update(mMeteorSystem.meteors(), deltaTime);
     mImpactParticleEmitter.consume(mMeteorSystem.impacts());
     mImpactLightSystem.consume(mMeteorSystem.impacts());
     mImpactLightSystem.update(deltaTime);
@@ -247,6 +249,7 @@ void Application::restartSequence()
     mImpactLightSystem.clear();
     mParticleSystem.clear();
     mImpactParticleEmitter.reset();
+    mMeteorTrailEmitter.reset();
     mImpactLightSystem.publish(mLightManager);
     mTimeline.play();
     mDebugTimer = 0;
@@ -268,6 +271,7 @@ void Application::shutdown()
     mImpactLightSystem.clear();
     mParticleSystem.clear();
     mImpactParticleEmitter.reset();
+    mMeteorTrailEmitter.reset();
     mMeteorSystem.releaseGraphics();
     mParticleSystem.releaseGraphics();
     mScene.objects.clear();

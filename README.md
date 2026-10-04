@@ -45,6 +45,7 @@ projet/
 │   │   ├── ImpactLight.h
 │   │   ├── ImpactLightSystem.h / ImpactLightSystem.cpp
 │   │   ├── MeteorShower.h / MeteorShower.cpp
+│   │   ├── MeteorTrailEmitter.h / MeteorTrailEmitter.cpp
 │   │   ├── Particle.h
 │   │   ├── ParticleSystem.h / ParticleSystem.cpp
 │   │   ├── ParticleEmitter.h / ParticleEmitter.cpp
@@ -59,6 +60,7 @@ projet/
 │   ├── meteor_system.cpp
 │   ├── meteor_shower.cpp
 │   ├── meteor_collision.cpp
+│   ├── meteor_trail.cpp
 │   ├── particle_system.cpp
 │   ├── impact_light.cpp
 │   └── application.cpp
@@ -99,13 +101,15 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `animation/TransformTrack.h` | Anime position, rotation et échelle d'une transformation. Un résolveur permet de retrouver un objet même après réallocation du vecteur de scène. |
 | `animation/EventTrack.h` | Déclenche des callbacks aux instants prévus, une fois par passage, même si une frame traverse plusieurs événements. |
 | `cinematic/MainSequence` | Décrit le film de 30 secondes : caméra, rotations, configuration de pluie, événements start/stop à 10/20 secondes et reset de son état. |
-| `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire et durée de vie restante. |
+| `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire, durée de vie restante et MeteorId stable. |
 | `systems/MeteorSystem` | Possède la population, simule les instances, détecte les contacts continus et expose les impacts de frame. Dessine avec les ressources communes, sans SceneObject par météore. |
 | `systems/MeteorResources` | Possède une sphère peu détaillée, un shader, la texture lunaire réutilisée et un seul matériau pour toute la population. |
 | `geometry/SphereCollider.h` | Centre et rayon monde, sans dépendance à la scène ou au rendu. |
 | `systems/MeteorImpact.h` | Contact sur la cible, normale, vitesse et taille ; aucune logique d’effet. |
 | `systems/ImpactLight.h` | Position, couleur, intensités, âge, durée et état de naissance d'un flash. |
 | `systems/ImpactLightSystem` | Consomme les impacts sans connaître la Terre ni MeteorSystem. Crée les flashes, les fait décroître et publie les lumières temporaires au LightManager. |
+| `systems/MeteorTrailEmitter` | Observe les météores en lecture seule, échantillonne leurs segments par distance et émet dans ParticleSystem ; état et RNG par MeteorId. |
+| `tests/meteor_trail.cpp` | Vérifie densité à 30/60/144 FPS, grandes frames, vieillissement dans la frame, suppressions, réallocations et replay. |
 | `systems/Particle.h` | Données runtime : position, vitesse, taille monde, âge et durée de vie. |
 | `systems/ParticleSystem` | Stocke, déplace et expire les particules sur CPU ; délègue le rendu sans dépendre des météores ou de SceneObject. |
 | `systems/ParticleEmitter` | Burst générique dans un cône : nombre, vitesse, taille, lifetime et seed configurables ; RNG réinitialisable. |
@@ -145,7 +149,8 @@ qui calcule la couleur des fragments :
 `Application` demande à `SceneSetup` de construire le monde et à `MainSequence`
 de configurer le film. À chaque frame, elle traite les entrées, avance `Timeline`
 (qui met à jour la caméra et les transformations), avance aussi la simulation de
-`MeteorSystem`, avance les particules existantes puis consomme les impacts avec
+`MeteorSystem` (après enregistrement des nouveaux météores par l’émetteur de
+traînées), avance les particules existantes, émet les traînées puis consomme les impacts avec
 `ImpactParticleEmitter` et `ImpactLightSystem`. Elle met à jour et publie les
 flashes, avance la génération de `MeteorShower`, puis dessine la scène, les
 météores et les particules avec les mêmes matrices de caméra.
@@ -163,7 +168,8 @@ intenses sont envoyées au GPU ; les autres continuent de vieillir sur le CPU.
 
 `R` vide aussi les flashes et leur publication dans `LightManager`. Les lumières
 permanentes restent présentes. `R` vide les particules et réinitialise aussi
-le RNG de leur émetteur. Il n'y a à cette phase ni bloom, ni cratère. Captures du test de contact : `/tmp/impact-flash-peak.ppm`,
+le RNG de leur émetteur ainsi que les états de traînée et les identifiants des
+météores. Il n'y a à cette phase ni bloom, ni cratère. Captures du test de contact : `/tmp/impact-flash-peak.ppm`,
 `/tmp/impact-flash-faded.ppm` et `/tmp/impact-flash-expired.ppm`.
 
 Chaque impact émet 48 fragments orangés à `impact.position + normal * 0.12`.
@@ -179,7 +185,7 @@ seule fois `glDrawArraysInstanced` (deux triangles par billboard). Le shader
 travaille en espace caméra, sans texture. La transparence additive évite le tri,
 le test de profondeur conserve l'occlusion par la Terre et les particules
 n'écrivent pas dans le depth buffer. L'opacité décroît avec l'âge. Il n'y a pas
-de collision, gravité, fumée, feu ou traînée dans cette phase.
+de collision des particules, gravité, fumée ou simulation de feu dans cette phase.
 
 Les tests CPU et OpenGL couvrent 100, 1 000 et 10 000 particules, le mouvement,
 l'expiration, l'occlusion, le reset et le replay des données et des images.

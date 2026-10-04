@@ -53,7 +53,9 @@ bool MeteorSystem::spawn(const Transform& transform, const glm::vec3& velocity, 
         || !finite(transform.position) || !finite(transform.rotation) || !finite(transform.scale)
         || transform.scale.x <= 0 || transform.scale.y <= 0 || transform.scale.z <= 0)
         return false;
-    mMeteors.push_back({transform, velocity, lifetime});
+    if (mNextId == 0) return false; // Do not reuse IDs after unsigned overflow.
+    mMeteors.push_back({transform, velocity, lifetime, mNextId});
+    ++mNextId;
     return true;
 }
 
@@ -97,6 +99,7 @@ void MeteorSystem::simulate(float deltaTime, const SphereCollider* collider)
 void MeteorSystem::clear()
 {
     mMeteors.clear();
+    mNextId = 1;
     mImpacts.clear();
 }
 

@@ -11,6 +11,7 @@
 #include "systems/MeteorShower.h"
 #include "systems/ImpactLightSystem.h"
 #include "systems/ImpactParticleEmitter.h"
+#include "systems/MeteorTrailEmitter.h"
 
 struct GLFWwindow;
 
@@ -73,5 +74,6 @@ private:
     ImpactLightSystem mImpactLightSystem;
     ParticleSystem mParticleSystem;
     ImpactParticleEmitter mImpactParticleEmitter{mParticleSystem};
+    MeteorTrailEmitter mMeteorTrailEmitter{mParticleSystem};
     MeteorShower mMeteorShower{mMeteorSystem};
 };

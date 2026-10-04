@@ -23,7 +23,7 @@ public:
     void update(float deltaTime, const SphereCollider& collider);
     // Cleared on every update (even invalid dt) and clear; no effects are triggered.
     const std::vector<MeteorImpact>& impacts() const { return mImpacts; }
-    void clear(); // Removes instances, keeps shared graphics available for reuse.
+    void clear(); // Removes instances, restarts IDs at 1, keeps shared graphics.
     std::size_t size() const { return mMeteors.size(); }
     // Read-only observation for diagnostics; invalidated by spawn/update/clear.
     const std::vector<Meteor>& meteors() const { return mMeteors; }
@@ -38,6 +38,7 @@ public:
 
 private:
     void simulate(float deltaTime, const SphereCollider* collider);
+    MeteorId mNextId = 1;
     std::vector<Meteor> mMeteors;
     std::vector<MeteorImpact> mImpacts;
     std::unique_ptr<MeteorResources> mResources;

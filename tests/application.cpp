@@ -216,6 +216,38 @@ static void checkParticles(ParticleSystem& system)
     assert(system.initGraphics());
 }
 
+static void checkTrails(MeteorSystem& meteors, ParticleSystem& particles)
+{
+    meteors.clear(); particles.clear();
+    MeteorTrailEmitter trails(particles);
+    Renderer renderer; LightManager lights;
+    const auto view = glm::lookAt(glm::vec3(0,0,20),glm::vec3(0),glm::vec3(0,1,0));
+    const auto projection = glm::ortho(-5.0f,5.0f,-3.75f,3.75f,0.1f,100.0f);
+    auto draw = [&]() {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        meteors.render(renderer,lights,view,projection,{0,0,20});
+    };
+    std::vector<unsigned char> first;
+    for (int pass = 0; pass < 2; ++pass) {
+        meteors.clear(); particles.clear(); trails.reset();
+        Transform meteor; meteor.position = {-2,0,0}; meteor.scale = glm::vec3(0.2f);
+        assert(meteors.spawn(meteor,{4,1,0},2));
+        trails.observe(meteors.meteors());
+        for (int frame = 0; frame < 30; ++frame) {
+            meteors.update(1.0f/60); particles.update(1.0f/60);
+            trails.update(meteors.meteors(),1.0f/60);
+        }
+        assert(particles.size() > 10 && trails.trackedCount() == 1);
+        draw(); const auto without = pixels();
+        particles.render(view,projection); const auto with = pixels();
+        assert(with != without);
+        if (!pass) { first = with; capture("/tmp/meteor-trail.ppm",640,480); }
+        else assert(with == first);
+        meteors.update(3); particles.update(3); trails.update(meteors.meteors(),3);
+        assert(meteors.size() == 0 && particles.size() == 0 && trails.trackedCount() == 0);
+    }
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -232,6 +264,7 @@ int main()
     checkMeteors(app.meteors());
     checkShower(app.meteors());
     checkParticles(app.particles());
+    checkTrails(app.meteors(),app.particles());
     Transform meteor;
     meteor.position = {30, 50, 15};
     meteor.scale = glm::vec3(0.5f);
@@ -245,7 +278,7 @@ int main()
     assert(app.meteors().spawn(touching, {0, 0, -10}, 5));
     app.run(1);
     assert(app.impactLights().lights().size() == 1);
-    assert(app.particles().size() == 48 && app.particles().particles()[0].age == 0);
+    assert(app.particles().size() >= 48 && app.particles().particles().back().age == 0);
     assert(app.impactLights().lights()[0].intensity == app.impactLights().lights()[0].initialIntensity);
     app.restartSequence();
     assert(app.meteors().size() == 0);
@@ -283,6 +316,7 @@ int main()
         ImpactLightSystem flashes;
         ParticleSystem particles;
         ImpactParticleEmitter particleEmitter(particles);
+        MeteorTrailEmitter trails(particles);
         assert(particles.initGraphics());
         MeteorShower shower(meteors);
         assert(meteors.initGraphics());
@@ -299,7 +333,7 @@ int main()
         {
             MainSequence::reset(timeline, shower, meteors);
             flashes.clear();
-            particles.clear(); particleEmitter.reset();
+            particles.clear(); particleEmitter.reset(); trails.reset();
             flashes.publish(lights);
             timeline.play();
             int imageIndex = 0;
@@ -309,8 +343,10 @@ int main()
                 if (frame > 0)
                 {
                     timeline.update(0.25f);
+                    trails.observe(meteors.meteors());
                     meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
                     particles.update(0.25f);
+                    trails.update(meteors.meteors(), 0.25f);
                     particleEmitter.consume(meteors.impacts());
                     flashes.consume(meteors.impacts());
                     flashes.update(0.25f);
@@ -521,5 +557,5 @@ int main()
     std::filesystem::remove_all(empty);
     assert(app.init());
     app.run(3);
-    std::cout << "Application lifecycle, impacts, instanced particles and cinematic image replay checks passed\n";
+    std::cout << "Application lifecycle, meteor trails, impacts, instanced particles and cinematic image replay checks passed\n";
 } // Application destructor also releases resources before GLFW.
