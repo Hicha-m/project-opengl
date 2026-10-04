@@ -22,9 +22,9 @@ struct GLFWwindow;
 
 struct ApplicationOptions
 {
-    int width = 1024;
-    int height = 768;
-    bool fullscreen = true;
+    int width = 1280;
+    int height = 720;
+    bool fullscreen = false;
     bool visible = true;
     bool music = true;
 };
