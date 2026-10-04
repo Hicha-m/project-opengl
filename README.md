@@ -46,6 +46,7 @@ projet/
 │   │   ├── ImpactLightSystem.h / ImpactLightSystem.cpp
 │   │   ├── MeteorShower.h / MeteorShower.cpp
 │   │   ├── MeteorTrailEmitter.h / MeteorTrailEmitter.cpp
+│   │   ├── EarthDamageSystem.h / EarthDamageSystem.cpp
 │   │   ├── Particle.h
 │   │   ├── ParticleSystem.h / ParticleSystem.cpp
 │   │   ├── ParticleEmitter.h / ParticleEmitter.cpp
@@ -60,6 +61,7 @@ projet/
 │   ├── meteor_system.cpp
 │   ├── meteor_shower.cpp
 │   ├── meteor_collision.cpp
+│   ├── earth_damage.cpp
 │   ├── meteor_trail.cpp
 │   ├── particle_system.cpp
 │   ├── impact_light.cpp
@@ -110,6 +112,8 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `systems/ImpactLightSystem` | Consomme les impacts sans connaître la Terre ni MeteorSystem. Crée les flashes, les fait décroître et publie les lumières temporaires au LightManager. |
 | `systems/MeteorTrailEmitter` | Observe les météores en lecture seule, échantillonne leurs segments par distance et émet dans ParticleSystem ; état et RNG par MeteorId. |
 | `tests/meteor_trail.cpp` | Vérifie densité à 30/60/144 FPS, grandes frames, vieillissement dans la frame, suppressions, réallocations et replay. |
+| `systems/EarthDamageSystem` | Consomme les impacts, transforme leurs positions monde en UV locales et accumule des marques circulaires dans une carte CPU persistante. Envoie la carte modifiée à la texture terrestre. |
+| `tests/earth_damage.cpp` | Vérifie les UV du mesh, translation/rotation/échelle, accumulation, saturation, couture U, pôles et reset sans contexte OpenGL. |
 | `systems/Particle.h` | Données runtime : position, vitesse, taille monde, âge et durée de vie. |
 | `systems/ParticleSystem` | Stocke, déplace et expire les particules sur CPU ; délègue le rendu sans dépendre des météores ou de SceneObject. |
 | `systems/ParticleEmitter` | Burst générique dans un cône : nombre, vitesse, taille, lifetime et seed configurables ; RNG réinitialisable. |
@@ -151,7 +155,8 @@ de configurer le film. À chaque frame, elle traite les entrées, avance `Timeli
 (qui met à jour la caméra et les transformations), avance aussi la simulation de
 `MeteorSystem` (après enregistrement des nouveaux météores par l’émetteur de
 traînées), avance les particules existantes, émet les traînées puis consomme les impacts avec
-`ImpactParticleEmitter` et `ImpactLightSystem`. Elle met à jour et publie les
+`EarthDamageSystem`, `ImpactParticleEmitter` et `ImpactLightSystem`. La carte
+de dégâts est envoyée à la texture terrestre après consommation. Elle met à jour et publie les
 flashes, avance la génération de `MeteorShower`, puis dessine la scène, les
 météores et les particules avec les mêmes matrices de caméra.
 
@@ -194,6 +199,43 @@ Captures : `/tmp/particles-100.ppm`, `/tmp/particles-1000.ppm`,
 `/tmp/impact-particles-moved.ppm`. Ces tests valident le fonctionnement à ces
 populations, sans constituer un benchmark FPS.
 
+## Marques de dégâts terrestres — phase 4.8.1
+
+`EarthDamageSystem` reçoit les `MeteorImpact`, la transformation actuelle de
+la Terre et son rayon local. Il applique l'inverse de la matrice de modèle à
+chaque position monde, puis calcule les UV conformes à `Sphere` :
+`u = atan2(z, x) / (2π)` ramené dans `[0,1)`,
+`v = 1 - acos(y / longueur) / π`. La carte reste en coordonnées locales :
+les marques suivent ensuite la rotation de la Terre sans repeindre la texture.
+
+La carte CPU de 512 × 256 valeurs contient des calottes circulaires mesurées
+sur la sphère, avec un bord progressif. Leur rayon angulaire est
+`clamp(atan2(2 * meteorScale, rayonMondeTerre), 0.025, 0.25)` radian. Chaque
+passage ajoute jusqu'à 0,7 de dégâts, avec saturation à 1. La distance sphérique
+traite naturellement la couture U et les pôles ; aucune duplication manuelle
+ou déformation de disque en UV n'est nécessaire.
+
+`SceneResources` possède la texture `earthDamageTexture` au format `GL_R8`,
+liée au matériau terrestre sous `damageMap` sur l'unité 4. `Texture2D` expose
+la création et la mise à jour d'une texture rouge dynamique. U utilise
+`GL_REPEAT`, V utilise `GL_CLAMP_TO_EDGE`, avec filtrage linéaire sans mipmaps.
+L'upload complet ne se produit que si la carte est marquée modifiée. Le shader
+assombrit sa couleur finale vers un charbon brun, y compris les lumières
+nocturnes et les reflets ; la carte vide conserve l'apparence initiale.
+
+`R` remet la carte CPU à zéro et envoie immédiatement cette carte vide au GPU.
+La fermeture efface aussi l'état CPU et libère la texture avec les autres
+ressources avant la destruction du contexte. Aucun changement n'a été apporté
+aux systèmes de météores, de flashes ou de particules pour gérer les dégâts.
+Cette étape n'ajoute ni incandescence, ni fissures, ni modification de géométrie.
+
+`make test-runtime` vérifie les texels réellement envoyés au GPU,
+l'assombrissement, l'accumulation, la couture, la disparition du marqueur de
+la face visible après rotation et la restauration de l'image après reset.
+Il compare aussi les cartes CPU et les images de deux relectures complètes.
+Captures : `/tmp/earth-damage-before.ppm`, `/tmp/earth-damage-burned.ppm`
+et `/tmp/earth-damage-accumulated.ppm`.
+
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
 nécessaire, `SceneResources`. Pour changer le fonctionnement du rendu, modifier
@@ -235,7 +277,7 @@ Depuis `projet` (les chemins de shaders et textures sont relatifs à ce dossier)
 make                  # compile l'application, sans la lancer
 make project          # même compilation
 make run              # compile si nécessaire, puis lance l'application
-make test             # tests Timeline, séquence, météores, flashes et particules, sans fenêtre
+make test             # tests Timeline, séquence, météores, flashes, particules et dégâts, sans fenêtre
 make test-sequence    # seulement le test de séquence
 make test-runtime     # test OpenGL masqué, nécessite un affichage X11
 make clean            # supprime build/ et l'exécutable project

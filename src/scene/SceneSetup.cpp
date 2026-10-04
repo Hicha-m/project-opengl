@@ -1,5 +1,6 @@
 #include "scene/SceneSetup.h"
 #include <stdexcept>
+#include "systems/EarthDamageSystem.h"
 
 namespace
 {
@@ -31,6 +32,9 @@ namespace
 bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources& resources)
 {
     if (!loadResources(resources)) return false;
+    const EarthDamageSystem emptyDamage;
+    if (!resources.earthDamageTexture.createRed(EarthDamageSystem::Width, EarthDamageSystem::Height,
+        emptyDamage.pixels().data())) return false;
     SceneObject earthObject("Earth",&resources.earthSphere.getMesh(),&resources.earthShader);
     earthObject.transform.position = glm::vec3(30.0f, 50.0f, 0.0f);
     earthObject.transform.scale = glm::vec3(10.0f);
@@ -38,6 +42,7 @@ bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources&
     earthObject.material.addTexture("nightMap",&resources.earthNightTexture,1);
     earthObject.material.addTexture("specularMap",&resources.earthSpecularTexture,2);
     earthObject.material.addTexture("normalMap",&resources.earthNormalTexture,3);
+    earthObject.material.addTexture("damageMap", &resources.earthDamageTexture, 4);
     earthObject.material.receivesLighting = true;
     scene.addObject(earthObject);
 

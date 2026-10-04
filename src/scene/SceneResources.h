@@ -9,6 +9,7 @@ struct SceneResources
 {
     ShaderProgram earthShader, cloudShader, sunShader, starShader;
     Texture2D earthDayTexture, earthNightTexture, earthSpecularTexture;
+    Texture2D earthDamageTexture;
     Texture2D earthNormalTexture, earthCloudsTexture, sunTexture, starTexture;
     Sphere earthSphere{1.0f, 32, 32};
     Sphere sunSphere{1.0f, 32, 32};

@@ -131,6 +131,9 @@ void Application::update(float deltaTime)
     // Advance existing particles before births, so every burst is visible at age zero.
     mParticleSystem.update(deltaTime);
     mMeteorTrailEmitter.update(mMeteorSystem.meteors(), deltaTime);
+    const auto* earth = mScene.findObject("Earth");
+    mEarthDamageSystem.consume(mMeteorSystem.impacts(), earth->transform, mResources->earthSphere.getRadius());
+    mEarthDamageSystem.upload(mResources->earthDamageTexture);
     mImpactParticleEmitter.consume(mMeteorSystem.impacts());
     mImpactLightSystem.consume(mMeteorSystem.impacts());
     mImpactLightSystem.update(deltaTime);
@@ -251,6 +254,8 @@ void Application::restartSequence()
     mImpactParticleEmitter.reset();
     mMeteorTrailEmitter.reset();
     mImpactLightSystem.publish(mLightManager);
+    mEarthDamageSystem.clear();
+    mEarthDamageSystem.upload(mResources->earthDamageTexture);
     mTimeline.play();
     mDebugTimer = 0;
 }
@@ -275,6 +280,7 @@ void Application::shutdown()
     mMeteorSystem.releaseGraphics();
     mParticleSystem.releaseGraphics();
     mScene.objects.clear();
+    mEarthDamageSystem.clear();
     mResources.reset(); // GPU destructors require the current context.
     mLightManager = LightManager{};
     if (mWindow) glfwDestroyWindow(mWindow);

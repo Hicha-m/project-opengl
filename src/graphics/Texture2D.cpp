@@ -106,3 +106,37 @@ void Texture2D::unbind(GLuint texUnit)
 	glActiveTexture(GL_TEXTURE0 + texUnit);
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
+
+// Preserve the caller's active unit, binding and pixel packing settings.
+bool Texture2D::createRed(int width, int height, const float* pixels)
+{
+    if (width <= 0 || height <= 0 || !pixels) return false;
+    GLint binding, alignment;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
+    if (!mTexture) glGenTextures(1, &mTexture);
+    glBindTexture(GL_TEXTURE_2D, mTexture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_FLOAT, pixels);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+    glBindTexture(GL_TEXTURE_2D, binding);
+    mRedWidth = width; mRedHeight = height;
+    return true;
+}
+bool Texture2D::updateRed(int width, int height, const float* pixels)
+{
+    if (!mTexture || width != mRedWidth || height != mRedHeight || !pixels) return false;
+    GLint binding, alignment;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
+    glBindTexture(GL_TEXTURE_2D, mTexture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_FLOAT, pixels);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+    glBindTexture(GL_TEXTURE_2D, binding);
+    return true;
+}
