@@ -74,6 +74,8 @@ def main():
             info = plistlib.load(source)
         print("iOS bundle metadata:", info, flush=True)
         (args.output / "ios-bundle.json").write_text(json.dumps(info, indent=2))
+        if (args.application / "Resources").exists():
+            raise RuntimeError("iOS bundles must not contain a root Resources directory")
         if not info.get("CFBundleVersion") or not info.get("CFBundleIdentifier"):
             raise RuntimeError("Missing iOS bundle version or identifier")
         devices = json.loads(run("xcrun", "simctl", "list", "devices", "available", "--json"))

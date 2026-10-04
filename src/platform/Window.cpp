@@ -160,7 +160,10 @@ void bind(Window* window) {
 }
 bool loadGraphics() {
 #ifdef PROJECT_MOBILE
-    return gladLoadGLES2(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress)) && GLAD_GL_ES_VERSION_3_0;
+    const bool ready = gladLoadGLES2(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress)) && GLAD_GL_ES_VERSION_3_0;
+    if (ready) std::cout << "[MOBILE] graphics=" << glGetString(GL_VERSION) << " renderer=" << glGetString(GL_RENDERER) << std::endl;
+    else std::cerr << "OpenGL ES 3.0 entry points unavailable\n";
+    return ready;
 #else
     return gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress)) && GLAD_GL_VERSION_3_3;
 #endif

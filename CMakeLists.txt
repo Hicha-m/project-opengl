@@ -143,12 +143,18 @@ if(APPLE)
     if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         set_target_properties(project PROPERTIES XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/mobile/ios/Info.plist")
     endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        # A root Resources directory makes Foundation interpret this as a legacy Mac bundle.
+        set(BUNDLE_ASSET_DIRECTORY "$<TARGET_BUNDLE_CONTENT_DIR:project>")
+    else()
+        set(BUNDLE_ASSET_DIRECTORY "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources")
+    endif()
     add_custom_command(TARGET project POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/shaders" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/shaders"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/textures" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/textures"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/models" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/models"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/third_party/licenses" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/licenses"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/music" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/build/music"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/shaders" "${BUNDLE_ASSET_DIRECTORY}/shaders"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/textures" "${BUNDLE_ASSET_DIRECTORY}/textures"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/models" "${BUNDLE_ASSET_DIRECTORY}/models"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/third_party/licenses" "${BUNDLE_ASSET_DIRECTORY}/licenses"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/music" "${BUNDLE_ASSET_DIRECTORY}/build/music"
         VERBATIM)
 elseif(UNIX)
     set_target_properties(project PROPERTIES INSTALL_RPATH "$ORIGIN/lib")

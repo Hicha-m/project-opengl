@@ -14,7 +14,7 @@
 namespace {
 bool imageAvailable() {
     GLint viewport[4]; glGetIntegerv(GL_VIEWPORT, viewport);
-    const int bottom = viewport[3] / 6; // Ignore the mobile control bar.
+    const int bottom = viewport[3] / 3; // Exclude controls and mobile safe-area margins.
     const int height = viewport[3] - bottom;
     if (viewport[2] <= 0 || height <= 0) return false;
     std::vector<unsigned char> pixels(std::size_t(viewport[2]) * height * 4);
@@ -97,7 +97,10 @@ int main(int argc, char** argv)
             options.height = 480;
         }
         Application app(options);
-        if (!app.init()) return 1;
+        if (!app.init()) {
+            if (mobileTesting) std::cerr << "MOBILE_MVP_TEST_FAILED: startup failed\n";
+            return 1;
+        }
         if (smokeTest && !app.audioReady()) {
             std::cerr << "Smoke test failed: music or impact audio unavailable\n";
             return 1;
