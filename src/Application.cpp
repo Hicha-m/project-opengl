@@ -46,6 +46,8 @@ bool Application::init()
         shutdown();
         return false;
     }
+    if(mOptions.music && mOptions.visible && mMusic.load("build/music/cinematic.wav"))
+        mTimeline.setDuration(mMusic.duration());
     mFPSStart = glfwGetTime();
     mInitialized = true;
     return true;
@@ -108,6 +110,7 @@ bool Application::initOpenGL()
 void Application::run(std::size_t frameLimit)
 {
     if (!mInitialized) return;
+    if(mMusic.ready() && !mMusic.running()) mMusic.restart();
     double lastTime = glfwGetTime();
     std::size_t frames = 0;
     while (!glfwWindowShouldClose(mWindow))
@@ -126,6 +129,7 @@ void Application::run(std::size_t frameLimit)
 void Application::update(float deltaTime)
 {
     updateInput(deltaTime);
+    if(mMusic.running()) deltaTime=std::max(0.0f,mMusic.position()-mTimeline.getTime());
     // Events affect this frame. Existing instances move first; births happen at
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
@@ -266,6 +270,9 @@ void Application::onKey(int key, int action)
         glfwGetWindowSize(mWindow, &width, &height);
         glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
     }
+    if (key == GLFW_KEY_M) {
+        mMusicMuted=!mMusicMuted; mMusic.setMuted(mMusicMuted);
+    }
     if (key == GLFW_KEY_R) restartSequence();
 }
 
@@ -290,6 +297,7 @@ void Application::restartSequence()
     mLightManager.setDirectionalLight(sunlight);
     SceneSetup::update(mScene,mCinematicCamera.getPosition());
     mTimeline.play();
+    if(mMusic.ready()) mMusic.restart();
     mDebugTimer = 0;
 }
 
@@ -302,6 +310,7 @@ void Application::onFramebufferSize(int width, int height)
 
 void Application::shutdown()
 {
+    mMusic.release();
     if (mWindow) glfwMakeContextCurrent(mWindow);
     mTimeline = Timeline{}; // Release borrowed scene/camera bindings first.
     mMeteorShower.reset();

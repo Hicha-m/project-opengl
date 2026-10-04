@@ -57,7 +57,7 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
     camera.enableOrbit(true);
     camera.orbitTargetTrack().addKeyframe(0, earth->transform.position);
     camera.orbitTargetTrack().addKeyframe(90, earth->transform.position);
-    camera.orbitTargetTrack().addKeyframe(110, SolarSystem::SunCenter,EasingType::EaseInOut);
+    camera.orbitTargetTrack().addKeyframe(96, SolarSystem::SunCenter,EasingType::EaseInOut);
     camera.orbitTargetTrack().addKeyframe(Duration, SolarSystem::SunCenter);
     auto easing = EasingType::EaseInOut;
     camera.orbitRadiusTrack().addKeyframe(0, 34, easing);
@@ -68,23 +68,26 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
     camera.orbitRadiusTrack().addKeyframe(62, 110, easing);
     camera.orbitRadiusTrack().addKeyframe(78, 210, easing);
     camera.orbitRadiusTrack().addKeyframe(90, 240, easing);
-    camera.orbitRadiusTrack().addKeyframe(110, 1800, easing);
-    camera.orbitRadiusTrack().addKeyframe(Duration, 3200, easing);
+    camera.orbitRadiusTrack().addKeyframe(96, 1800, easing);
+    camera.orbitRadiusTrack().addKeyframe(100, 6500, easing);
+    camera.orbitRadiusTrack().addKeyframe(105, 16000, easing);
+    camera.orbitRadiusTrack().addKeyframe(Duration, 35000, easing);
     camera.orbitYawTrack().addKeyframe(0, 15, easing);
     camera.orbitYawTrack().addKeyframe(24, 40, easing);
     camera.orbitYawTrack().addKeyframe(52, 80, easing);
     camera.orbitYawTrack().addKeyframe(78, 105, easing);
     camera.orbitYawTrack().addKeyframe(90, 110, easing);
-    camera.orbitYawTrack().addKeyframe(110, 135, easing);
+    camera.orbitYawTrack().addKeyframe(96, 150, easing);
     camera.orbitYawTrack().addKeyframe(Duration, 150, easing);
     camera.orbitPitchTrack().addKeyframe(0, 8, easing);
     camera.orbitPitchTrack().addKeyframe(52, 10, easing);
     camera.orbitPitchTrack().addKeyframe(90, 6, easing);
-    camera.orbitPitchTrack().addKeyframe(110, 40, easing);
+    camera.orbitPitchTrack().addKeyframe(96, 55, easing);
     camera.orbitPitchTrack().addKeyframe(Duration, 55, easing);
     camera.fovTrack().addKeyframe(0, 45, easing);
     camera.fovTrack().addKeyframe(40, 48, easing);
     camera.fovTrack().addKeyframe(62, 52, easing);
+    camera.fovTrack().addKeyframe(96, 45, easing);
     camera.fovTrack().addKeyframe(Duration, 45, easing);
 
     timeline.setDuration(Duration);
@@ -93,7 +96,7 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
     if(solar) timeline.addTrack(std::make_unique<SolarTrack>(*solar,scene,shower,breakup));
     timeline.addTrack(std::make_unique<CameraTrack>(camera,[&scene,initialEarth](float time) {
         const auto* current=scene.findObject("Earth");
-        return current ? (current->transform.position-initialEarth)*(1.0f-glm::smoothstep(90.0f,110.0f,time)) : glm::vec3(0);
+        return current ? (current->transform.position-initialEarth)*(1.0f-glm::smoothstep(90.0f,96.0f,time)) : glm::vec3(0);
     }));
 
     auto animateRotation = [&](const std::string& name, float degreesPerSecond)

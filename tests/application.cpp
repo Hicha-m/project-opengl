@@ -633,14 +633,21 @@ static void checkSolarViews()
     };
     const auto near=skyDraw(300);
     assert(sky->material.floatUniforms.at("milkyWayBlend")==0 && sky->material.floatUniforms.at("galaxyBlend")==0);
-    const auto far=skyDraw(3200);
+    const auto far=skyDraw(8000);
     assert(sky->material.floatUniforms.at("milkyWayBlend")==1 && sky->material.floatUniforms.at("galaxyBlend")==1);
     assert(near!=far);
+    const float largeScale=sky->material.floatUniforms.at("galaxyScale");
+    const auto smaller=skyDraw(16000);
+    assert(sky->material.floatUniforms.at("galaxyScale")<largeScale && smaller!=far);
+    const auto gone=skyDraw(35000);
+    assert(sky->material.floatUniforms.at("galaxyOpacity")==0);
+    for(auto channel:gone) assert(channel==0);
+
     auto* originalStars=sky->material.textures.at("starMap").texture;
     sky->material.textures.at("starMap").texture=&resources.earthDayTexture;
-    assert(skyDraw(3200)==far); // The original stars are completely replaced at large distance.
+    assert(skyDraw(8000)==far); // The original stars are completely replaced at large distance.
     sky->material.textures.at("starMap").texture=originalStars;
-    skyDraw(1000);
+    skyDraw(4000);
     assert(sky->material.floatUniforms.at("milkyWayBlend")>0 && sky->material.floatUniforms.at("milkyWayBlend")<1);
     assert(glGetError()==GL_NO_ERROR);
 }
@@ -744,13 +751,14 @@ int main()
         assert(meteors.initGraphics());
         SolarSystem solar;
         assert(MainSequence::build(timeline, camera, scene, shower, &solar, &breakup));
-        const int frames[] = {0, 96, 160, 192, 208, 224, 264, 360, 440, 520};
+        const int frames[] = {0, 96, 160, 192, 208, 224, 264, 360, 384, 400, 420, 441};
         constexpr int imageCount = sizeof(frames)/sizeof(frames[0]);
         const char* images[] = {"/tmp/space-start.ppm", "/tmp/space-middle.ppm",
             "/tmp/space-bombardment.ppm", "/tmp/space-cracks.ppm",
             "/tmp/space-breakup.ppm", "/tmp/space-core.ppm",
             "/tmp/space-fragments.ppm", "/tmp/space-aftermath.ppm",
-            "/tmp/solar-system.ppm", "/tmp/milky-way.ppm"};
+            "/tmp/solar-system.ppm", "/tmp/milky-way.ppm",
+            "/tmp/milky-way-small.ppm", "/tmp/milky-way-gone.ppm"};
         std::vector<std::vector<unsigned char>> firstPass;
         std::vector<std::vector<MeteorImpact>> firstImpacts;
         std::vector<std::vector<ImpactLight>> firstLights;
@@ -773,7 +781,7 @@ int main()
             std::size_t impactCount = 0;
             float previousDestruction = 0;
             std::size_t coreContacts = 0;
-            for (int frame = 0; frame <= int(MainSequence::Duration*4); ++frame)
+            for (int frame = 0; frame <= int(std::ceil(MainSequence::Duration*4)); ++frame)
             {
                 const bool hittingCore = breakup.active();
                 if (frame > 0)

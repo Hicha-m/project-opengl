@@ -9,7 +9,8 @@ class EarthBreakupSystem;
 
 namespace MainSequence
 {
-    constexpr float Duration = 130.0f;
+    // Decoded duration of music/Can You Hear The Music.mp3 (48 kHz PCM).
+    constexpr float Duration = 110.165625f;
     constexpr float BombardmentStart = 8.0f;
     constexpr float BombardmentEnd = 62.0f;
     // Configure an empty timeline; scene, camera and shower must outlive its bindings.

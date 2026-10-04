@@ -9,6 +9,8 @@ projet/
 ├── src/
 │   ├── main.cpp
 │   ├── Application.h / Application.cpp
+│   ├── audio/
+│   │   └── MusicPlayer.h / MusicPlayer.cpp
 │   ├── camera/
 │   │   ├── Camera.h / Camera.cpp
 │   │   └── CinematicCamera.h / CinematicCamera.cpp
@@ -58,7 +60,9 @@ projet/
 │       └── MainSequence.h / MainSequence.cpp
 ├── shaders/                  # programmes GLSL exécutés par le GPU
 ├── textures/                 # images des planètes, de la Lune, du Soleil et de l'espace
+├── music/                    # morceau MP3 fourni
 ├── tests/
+│   ├── music_player.cpp
 │   ├── solar_system.cpp
 │   ├── timeline.cpp
 │   ├── main_sequence.cpp
@@ -108,7 +112,8 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `animation/CameraTrack.h` | Relie la Timeline à `CinematicCamera` pour évaluer la caméra au temps courant. |
 | `animation/TransformTrack.h` | Anime position, rotation et échelle d'une transformation. Un résolveur permet de retrouver un objet même après réallocation du vecteur de scène. |
 | `animation/EventTrack.h` | Déclenche des callbacks aux instants prévus, une fois par passage, même si une frame traverse plusieurs événements. |
-| `cinematic/MainSequence` | Décrit le film de 130 secondes : suivi de la Terre, bombardement, rupture, plan final puis recul sur le système solaire et la Voie lactée. |
+| `cinematic/MainSequence` | Décrit le film de 110,17 secondes : suivi de la Terre, bombardement, rupture, plan final puis recul sur le système solaire et la Voie lactée. |
+| `audio/MusicPlayer` | Lecture SDL3 du morceau converti en PCM, horloge audio, rewind, volume et mute ; la cinématique suit le temps consommé par le flux. |
 | `systems/SolarSystem` | Orbites circulaires comprimées des huit planètes, suivi des nuages et anneaux, orbite lunaire puis dérive à vitesse conservée après rupture. Aucun solveur gravitationnel. |
 | `tests/solar_system.cpp` | Vérifie les rayons et vitesses orbitales, la dérive tangentielle de la Lune, la pose capturée de la Terre et le reset déterministe. |
 | `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire, durée de vie restante et MeteorId stable. |
@@ -428,7 +433,7 @@ captures de comparaison sont `/tmp/earth-color-legacy.ppm`,
 
 ## Séquence finale — phase 4.9
 
-`MainSequence` assemble un film de **130 secondes**, dont les 90 premières
+`MainSequence` assemble un film de **110,17 secondes**, dont les 90 premières
 conservent le plan de destruction avant le recul sur le système solaire.
 La Terre et les nuages tournent lentement (2 et 2,3 degrés/s), pour laisser
 lire les impacts attachés à la surface. La caméra garde la Terre au centre,
@@ -442,8 +447,10 @@ orbite doucement puis recule pour suivre l'expansion des morceaux.
 | 40–48 s | Vague à 5/s, échelles 0,22–0,75 ; montée du niveau de destruction et fissures. |
 | 48–62 s | Vague maximale à 9/s, échelles 0,25–1,1 si la Terre est encore intacte. |
 | Après la rupture–90 s | Arrêt des naissances, recul de caméra, fragments autour du noyau blanc et bloom. |
-| 90–110 s | Recentrage sur le Soleil, recul jusqu’à 1 800 unités, révélation des planètes et orbites. |
-| 110–130 s | Recul jusqu’à 3 200 unités et transition du fond vers la Voie lactée. |
+| 90–96 s | Recentrage sur le Soleil et recul à 1 800 unités : vue du système solaire, fond étoilé conservé. |
+| 96–100 s | Recul à 6 500 unités, transition tardive vers la Voie lactée. |
+| 100–105 s | Recul à 16 000 unités : la galaxie diminue dans le champ. |
+| 105–110,17 s | Recul à 35 000 unités et disparition progressive de la galaxie pendant la fin du morceau. |
 
 La zone d'émission est centrée 160 unités au-dessus de la Terre, avec
 110 unités d'étendue horizontale et 10 en hauteur. Les météores naissent
@@ -479,12 +486,13 @@ le niveau de destruction et la rupture ; la Terre et ses nuages redeviennent
 visibles immédiatement. Les tests vérifient les naissances hors champ, les
 angles et tailles variés, la progression jusqu'à la rupture et l'égalité
 exacte de deux replays avec le même stepping. Les tests OpenGL comparent
-également dix images sur les 130 secondes, les cartes, les impacts, les
+également douze images sur les 110,17 secondes, les cartes, les impacts, les
 particules et les lumières. Captures : `/tmp/space-start.ppm`, `/tmp/space-middle.ppm`,
 `/tmp/space-bombardment.ppm`, `/tmp/space-cracks.ppm`,
 `/tmp/space-breakup.ppm`, `/tmp/space-core.ppm`,
 `/tmp/space-fragments.ppm`, `/tmp/space-aftermath.ppm`,
-`/tmp/solar-system.ppm` et `/tmp/milky-way.ppm`.
+`/tmp/solar-system.ppm`, `/tmp/milky-way.ppm`,
+`/tmp/milky-way-small.ppm` et `/tmp/milky-way-gone.ppm`.
 Le temps de rupture peut légèrement varier avec
 un autre stepping ; tous les resets à stepping identique rejouent le même film.
 
@@ -495,7 +503,8 @@ Le Soleil reste émissif. Les nouvelles planètes et la Lune utilisent un
 éclairage dirigé vers la position du Soleil ; la Terre conserve son matériau,
 ses cartes de dégâts et sa lumière directionnelle actualisée. Saturne possède
 un anneau transparent texturé et incliné. Les guides orbitaux réutilisent un
-mesh annulaire commun, avec une opacité qui augmente lors du recul.
+mesh annulaire commun, avec une opacité qui augmente lors du recul solaire
+puis disparaît entre 12 000 et 24 000 unités dans le plan galactique.
 
 Les tailles et distances sont comprimées pour rester lisibles :
 
@@ -524,19 +533,48 @@ la gravitation solaire ou des collisions de débris. Son guide orbital et
 celui de la Terre disparaissent. `R` restaure toutes les poses et l'orbite lunaire.
 
 Le fond fait une transition selon la distance au Soleil, y compris en mode
-FPS : `2k_stars.jpg` vers `2k_stars_milky_way.jpg` entre 600 et 1 400 unités,
-puis vers `2k_milky_way.jpg` entre 1 600 et 3 000 unités. Le premier fond
+FPS : `2k_stars.jpg` vers `2k_stars_milky_way.jpg` entre 3 000 et 5 000 unités,
+puis vers `2k_milky_way.jpg` entre 5 000 et 7 000 unités. Le premier fond
 n'est plus visible après la transition. La texture de galaxie carrée est
 projetée dans une direction fixe du ciel, plutôt qu'étirée sur les UV de la
-sphère ; elle ne suit donc pas la rotation de la caméra. Le ciel est rendu
+sphère ; elle ne suit donc pas la rotation de la caméra. Sa taille angulaire
+diminue avec la distance (`5000 / distance`), puis son opacité décroît entre
+18 000 et 32 000 unités jusqu’à zéro, sans ramener l’ancien fond étoilé. Le ciel est rendu
 avant les éléments transparents pour laisser visibles anneaux et orbites.
 
 Les tests CPU vérifient les orbites, la libération de la Lune et le replay.
 Les tests OpenGL vérifient les anneaux et remplacent temporairement la
 texture du fond étoilé pour prouver qu'elle ne contribue plus au plan éloigné.
-Ils comparent les dix images de deux replays complets, dont les plans solaires.
+Ils comparent les douze images de deux replays complets, dont les plans solaires.
 Captures supplémentaires : `/tmp/saturn-rings.ppm`, `/tmp/solar-system.ppm`
 et `/tmp/milky-way.ppm`.
+
+## Musique et synchronisation
+
+Le morceau fourni est `music/Can You Hear The Music.mp3`. Make le convertit
+avec FFmpeg en PCM stéréo 48 kHz dans `build/music/cinematic.wav` (110,165625 s).
+Le MP3 reste intact ; le fichier WAV est généré et disparaît avec `make clean`.
+La lecture utilise SDL3, sans nouveau processus lancé pendant le film.
+SDL3 (bibliothèque de développement et fichier pkg-config `sdl3`) et FFmpeg
+sont requis en plus des dépendances graphiques.
+
+L'application visible démarre la musique au début de `run`. Chaque frame
+avance la simulation jusqu'à la position consommée par le flux audio :
+le film suit donc le morceau plutôt que d'utiliser deux horloges indépendantes.
+La durée de la Timeline est ajustée à celle du PCM chargé. Les 90 premières
+secondes conservent le bombardement et le plan des fragments ; le recul
+solaire et la révélation galactique occupent la dernière montée, puis la
+galaxie diminue et s'efface pendant la fin calme du morceau.
+Les repères de montage restent centralisés dans `MainSequence`.
+
+`R` rembobine le flux audio et réinitialise la totalité du film. `M` coupe ou
+rétablit le son, sans arrêter l'horloge de lecture. Le gain initial est 0,7.
+À la fermeture, le flux et le sous-système audio sont libérés. En l'absence
+d'audio disponible, la séquence utilise le temps de frame habituel.
+Les applications masquées et les tests graphiques n'ouvrent pas de sortie
+sonore ; les replays restent comparés avec un stepping fixe. Le test
+`music_player` utilise le périphérique SDL `dummy` pour vérifier la durée,
+l'avancement monotone, le rewind, le mute et la récupération après erreur.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
@@ -551,6 +589,7 @@ ainsi que les ressources de rupture et de post-traitement avant de détruire la 
 
 ### Commandes
 
+- `M` : couper ou rétablir la musique sans interrompre le film.
 - `F3` : basculer entre la caméra cinématique et la caméra FPS. La caméra FPS
   démarre depuis la vue actuelle ; la cinématique continue pendant l'exploration.
 - En mode FPS : souris pour regarder, `W` / `S` pour avancer / reculer,
@@ -579,7 +618,7 @@ Depuis `projet` (les chemins de shaders et textures sont relatifs à ce dossier)
 make                  # compile l'application, sans la lancer
 make project          # même compilation
 make run              # compile si nécessaire, puis lance l'application
-make test             # tests Timeline, séquence, météores, flashes, particules et dégâts, sans fenêtre
+make test             # tests CPU et audio (périphérique dummy), sans fenêtre
 make test-sequence    # seulement le test de séquence
 make test-runtime     # test OpenGL masqué, nécessite un affichage X11
 make clean            # supprime build/ et l'exécutable project

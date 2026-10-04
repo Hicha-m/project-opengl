@@ -145,6 +145,8 @@ bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources&
     starObject.material.addTexture("galaxyMap",&resources.galaxyTexture,2);
     starObject.material.setFloat("milkyWayBlend",0);
     starObject.material.setFloat("galaxyBlend",0);
+    starObject.material.setFloat("galaxyScale",1);
+    starObject.material.setFloat("galaxyOpacity",1);
     starObject.material.depthLEqual = true;
     starObject.material.depthWrite = false;
     // Draw the sky before transparent rings/orbit guides (which do not write depth).
@@ -167,10 +169,14 @@ void SceneSetup::update(Scene& scene, const glm::vec3& cameraPosition)
     if (auto* stars = scene.findObject("Stars")) {
         stars->transform.position = cameraPosition;
         const float distance=glm::distance(cameraPosition,SolarSystem::SunCenter);
-        stars->material.setFloat("milkyWayBlend",glm::smoothstep(600.0f,1400.0f,distance));
-        stars->material.setFloat("galaxyBlend",glm::smoothstep(1600.0f,3000.0f,distance));
+        stars->material.setFloat("milkyWayBlend",glm::smoothstep(3000.0f,5000.0f,distance));
+        stars->material.setFloat("galaxyBlend",glm::smoothstep(5000.0f,7000.0f,distance));
+        stars->material.setFloat("galaxyScale",5000.0f/std::max(distance,5000.0f));
+        stars->material.setFloat("galaxyOpacity",1.0f-glm::smoothstep(18000.0f,32000.0f,distance));
     }
-    const float orbitOpacity=glm::smoothstep(450.0f,900.0f,glm::distance(cameraPosition,SolarSystem::SunCenter));
+    const float solarDistance=glm::distance(cameraPosition,SolarSystem::SunCenter);
+    const float orbitOpacity=glm::smoothstep(450.0f,900.0f,solarDistance)
+        *(1.0f-glm::smoothstep(12000.0f,24000.0f,solarDistance));
     for(auto& object:scene.objects) if(object.name.rfind("Orbit",0)==0)
         object.material.setFloat("opacity",orbitOpacity);
 }

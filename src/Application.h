@@ -15,6 +15,7 @@
 #include "systems/EarthDamageSystem.h"
 #include "systems/EarthBreakupSystem.h"
 #include "systems/SolarSystem.h"
+#include "audio/MusicPlayer.h"
 #include "graphics/HDRPipeline.h"
 
 struct GLFWwindow;
@@ -25,6 +26,7 @@ struct ApplicationOptions
     int height = 768;
     bool fullscreen = true;
     bool visible = true;
+    bool music = true;
 };
 
 class Application
@@ -63,6 +65,8 @@ private:
     bool mWireframe = false;
     bool mCameraDebug = false;
     bool mFPSMode = false;
+    bool mMusicMuted = false;
+    MusicPlayer mMusic;
     float mMoveSpeed = 5.0f;
     double mFPSStart = 0;
     unsigned mFrameCount = 0;
