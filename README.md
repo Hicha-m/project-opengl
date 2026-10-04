@@ -39,7 +39,8 @@ projet/
 │   ├── systems/
 │   │   ├── Meteor.h
 │   │   ├── MeteorSystem.h / MeteorSystem.cpp
-│   │   └── MeteorResources.h / MeteorResources.cpp
+│   │   ├── MeteorResources.h / MeteorResources.cpp
+│   │   └── MeteorShower.h / MeteorShower.cpp
 │   └── cinematic/
 │       └── MainSequence.h / MainSequence.cpp
 ├── shaders/                  # programmes GLSL exécutés par le GPU
@@ -48,6 +49,7 @@ projet/
 │   ├── timeline.cpp
 │   ├── main_sequence.cpp
 │   ├── meteor_system.cpp
+│   ├── meteor_shower.cpp
 │   └── application.cpp
 ├── build/                    # objets, dépendances et tests compilés, ignorés par Git
 └── project                   # exécutable généré
@@ -89,10 +91,12 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire et durée de vie restante. |
 | `systems/MeteorSystem` | Possède la population, expose spawn/update/clear et dessine les instances avec les ressources communes, sans créer de SceneObject. |
 | `systems/MeteorResources` | Possède une sphère peu détaillée, un shader, la texture lunaire réutilisée et un seul matériau pour toute la population. |
+| `systems/MeteorShower` | Générateur CPU indépendant : boîte de spawn, direction avec dispersion conique, cadence par seconde, plages de paramètres et seed reproductible. |
+| `tests/meteor_shower.cpp` | Vérifie start/stop, validation, plages, dispersion, seed et cadence à 30/60/144 FPS. |
 | `tests/meteor_system.cpp` | Vérifie sans OpenGL le mouvement indépendant, les expirations, les entrées invalides, clear et 1 000 instances. |
 | `tests/timeline.cpp` | Vérifie les pistes, la pause, la reprise, la fin, les événements et la relecture. |
 | `tests/main_sequence.cpp` | Vérifie les paramètres de la séquence complète et les bindings après ajout d'objets. |
-| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL de la séquence et des météores, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte huit captures dans `/tmp`. |
+| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL de la séquence et des météores, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte onze captures dans `/tmp`. |
 | `Makefile` | Compile et lie l'application et les tests, suit les dépendances entre headers et sources, lance l'application ou nettoie les fichiers générés. |
 | `.gitignore` | Exclut notamment l'exécutable et le dossier de compilation `build/` du suivi Git. |
 
@@ -152,12 +156,8 @@ Depuis `projet` (les chemins de shaders et textures sont relatifs à ce dossier)
 make                  # compile l'application, sans la lancer
 make project          # même compilation
 make run              # compile si nécessaire, puis lance l'application
-make test             # tests Timeline, MainSequence et MeteorSystem, sans fenêtre
+make test             # tests Timeline, MainSequence, MeteorSystem et MeteorShower, sans fenêtre
 make test-sequence    # seulement le test de séquence
 make test-runtime     # test OpenGL masqué, nécessite un affichage X11
 make clean            # supprime build/ et l'exécutable project
 ```
-
-Le test runtime provoque volontairement des erreurs de chargement pour vérifier
-la récupération. Ses captures sont `/tmp/space-start.ppm`, `/tmp/space-middle.ppm`
-et `/tmp/space-end.ppm`.

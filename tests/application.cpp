@@ -11,6 +11,7 @@
 #include "Application.h"
 #include "scene/SceneSetup.h"
 #include "cinematic/MainSequence.h"
+#include "systems/MeteorShower.h"
 
 static void capture(const char* path, int width, int height)
 {
@@ -102,6 +103,66 @@ static void checkMeteors(MeteorSystem& system)
     assert(system.initGraphics());
 }
 
+static void checkShower(MeteorSystem& system)
+{
+    system.clear();
+    MeteorShower shower(system);
+    MeteorShowerConfig config;
+    config.spawnRate = 100;
+    config.origin = {0, 7, 0};
+    config.spawnHalfExtents = {10, 2, 2};
+    config.direction = {0.3f, -1, 0};
+    config.spreadRadians = 0.2f;
+    config.minSpeed = 0.8f;
+    config.maxSpeed = 1.5f;
+    config.minScale = 0.1f;
+    config.maxScale = 0.25f;
+    config.minLifetime = 8;
+    config.maxLifetime = 10;
+    config.seed = 42;
+    assert(shower.configure(config));
+    Renderer renderer;
+    LightManager lights;
+    DirectionalLight light;
+    light.direction = glm::normalize(glm::vec3(-1, -1, -1));
+    lights.setDirectionalLight(light);
+    const glm::vec3 eye(0, 0, 20);
+    const auto view = glm::lookAt(eye, glm::vec3(0), glm::vec3(0, 1, 0));
+    const auto projection = glm::ortho(-14.0f, 14.0f, -10.5f, 10.5f, 0.1f, 100.0f);
+    auto draw = [&]()
+    {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        system.render(renderer, lights, view, projection, eye);
+    };
+    draw();
+    const auto empty = pixels();
+    shower.start();
+    for (int frame = 1; frame <= 300; ++frame)
+    {
+        // Emit at the frame boundary, after advancing already existing instances.
+        system.update(1.0f / 60);
+        shower.update(1.0f / 60);
+        if (frame == 60 || frame == 300)
+        {
+            assert(system.size() == std::size_t(frame == 60 ? 100 : 500));
+            draw();
+            assert(pixels() != empty);
+            capture(frame == 60 ? "/tmp/shower-100.ppm" : "/tmp/shower-500.ppm", 640, 480);
+        }
+    }
+    const auto populated = pixels();
+    shower.stop();
+    shower.update(0.5f);
+    system.update(0.5f);
+    assert(system.size() == 500);
+    draw();
+    assert(pixels() != populated);
+    capture("/tmp/shower-stopped-moving.ppm", 640, 480);
+    system.update(20);
+    draw();
+    assert(system.size() == 0 && pixels() == empty);
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -115,6 +176,7 @@ int main()
     app.run(3);
     assert(glGetError() == GL_NO_ERROR);
     checkMeteors(app.meteors());
+    checkShower(app.meteors());
     Transform meteor;
     meteor.position = {30, 50, 15};
     meteor.scale = glm::vec3(0.5f);
