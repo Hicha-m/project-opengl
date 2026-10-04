@@ -23,6 +23,10 @@
 #include "scene/Scene.h"
 #include "graphics/Renderer.h"
 
+#include "animation/CinematicCamera.h"
+#include "animation/AnimationTrack.h"
+#include "animation/Timeline.h"
+
 
 // Global Variables
 const char* APP_TITLE = "Project - Space";
@@ -35,6 +39,8 @@ bool gCameraDebug = false;
 bool fullscreen = true;
 glm::vec4 gClearColor(0.06f, 0.06f, 0.07f, 1.0f);
 
+Timeline timeline;
+CinematicCamera cinematicCamera;
 FPSCamera fpsCamera(glm::vec3(0.0f, 3.5f, 10.0f), glm::radians(110.0f), glm::radians(55.0f));
 const double ZOOM_SENSITIVITY = -3.0;
 float MOVE_SPEED = 5.0; // units per second
@@ -45,7 +51,6 @@ const float MAX_DISTANCE = 100000000.0f;
 // Function prototypes
 void glfw_onKey(GLFWwindow* window, int key, int scancode, int action, int mode);
 void glfw_onFramebufferSize(GLFWwindow* window, int width, int height);
-void glfw_onMouseScroll(GLFWwindow* window, double deltaX, double deltaY);
 void update(double elapsedTime);
 void showFPS(GLFWwindow* window);
 bool initOpenGL();
@@ -151,6 +156,144 @@ int main()
 	// Set the directional light
 	lightManager.setDirectionalLight(sunLight);
 
+	// animation
+
+	cinematicCamera.enableOrbit(true);
+
+	cinematicCamera
+		.orbitTargetTrack()
+		.addKeyframe(
+			0.0f,
+			earthObject.transform.position
+		);
+
+	cinematicCamera
+		.orbitTargetTrack()
+		.addKeyframe(
+			30.0f,
+			earthObject.transform.position
+		);
+
+
+
+	cinematicCamera
+		.orbitRadiusTrack()
+		.addKeyframe(
+			0.0f,
+			30.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.orbitRadiusTrack()
+		.addKeyframe(
+			10.0f,
+			40.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.orbitRadiusTrack()
+		.addKeyframe(
+			20.0f,
+			100.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.orbitRadiusTrack()
+		.addKeyframe(
+			30.0f,
+			300.0f,
+			EasingType::EaseInOut
+		);
+
+
+
+	cinematicCamera
+		.orbitYawTrack()
+		.addKeyframe(
+			0.0f,
+			0.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.orbitYawTrack()
+		.addKeyframe(
+			30.0f,
+			180.0f,
+			EasingType::EaseInOut
+		);
+
+
+
+	cinematicCamera
+		.orbitPitchTrack()
+		.addKeyframe(
+			0.0f,
+			10.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.orbitPitchTrack()
+		.addKeyframe(
+			30.0f,
+			25.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.fovTrack()
+		.addKeyframe(
+			0.0f,
+			45.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.fovTrack()
+		.addKeyframe(
+			15.0f,
+			55.0f,
+			EasingType::EaseInOut
+		);
+
+
+	cinematicCamera
+		.fovTrack()
+		.addKeyframe(
+			30.0f,
+			65.0f,
+			EasingType::EaseInOut
+		);
+
+
+
+	Timeline timeline;
+
+	timeline.setDuration(30.0f);
+
+
+	timeline.addCallback(
+		[&](float time)
+		{
+			cinematicCamera.update(time);
+		}
+	);
+
+	timeline.play();
+
+	// /// // /// 
+
 
 	float earthRotation = 0.0f;
 	float cloudRotation = 0.0f;
@@ -166,13 +309,40 @@ int main()
 		double currentTime = glfwGetTime();
 		double deltaTime = currentTime - lastTime;
 
-
-		earthRotation += deltaTime  * 100;
-		cloudRotation += deltaTime * 0.05f * 100;
-
 		// Poll for and process events
 		glfwPollEvents();
 		update(deltaTime);
+
+		// ========================================================
+		// TIMELINE
+		// ========================================================
+
+		timeline.update(
+			static_cast<float>(deltaTime)
+		);
+
+		static double debugTimer = 0.0;
+		debugTimer += deltaTime;
+
+		if (debugTimer >= 1.0)
+		{
+			debugTimer = 0.0;
+
+			glm::vec3 camPos =
+				cinematicCamera.getPosition();
+
+			std::cout
+				<< "[DEBUG]"
+				<< " timeline=" << timeline.getTime()
+				<< " playing=" << timeline.isPlaying()
+				<< " cam=("
+				<< camPos.x << ", "
+				<< camPos.y << ", "
+				<< camPos.z << ")"
+				<< std::endl;
+		}
+
+		// ====================
 
 		// Clear the screen
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -180,19 +350,22 @@ int main()
 		glm::mat4 model(1.0), view(1.0), projection(1.0);
 
 		// Create the View matrix
-		view = fpsCamera.getViewMatrix();
+		view = cinematicCamera.getViewMatrix();
 
 		// Create the projection matrix
-		projection = glm::perspective(glm::radians(fpsCamera.getFOV()), (float)gWindowWidth / (float)gWindowHeight, 0.1f, MAX_DISTANCE);
+		projection = glm::perspective(glm::radians(cinematicCamera.getFOV()), (float)gWindowWidth / (float)gWindowHeight, 0.1f, MAX_DISTANCE);
 
 		// update the view (camera) position
-		glm::vec3 viewPos = fpsCamera.getPosition();
+		glm::vec3 viewPos = cinematicCamera.getPosition();
 
 
 
 		// --------------------------------------------------------
         // UPDATE OBJECT TRANSFORMS
         // --------------------------------------------------------
+
+		earthRotation += deltaTime  * 100;
+		cloudRotation += deltaTime * 0.05f * 100;
 
         SceneObject* earth = scene.findObject("Earth");
         if (earth)
@@ -291,7 +464,6 @@ bool initOpenGL()
 	// Set the required callback functions
 	glfwSetKeyCallback(gWindow, glfw_onKey);
 	glfwSetFramebufferSizeCallback(gWindow, glfw_onFramebufferSize);
-	glfwSetScrollCallback(gWindow, glfw_onMouseScroll);
 
 	// Hides and grabs cursor, unlimited movement
 	glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -364,18 +536,6 @@ void glfw_onFramebufferSize(GLFWwindow* window, int width, int height)
     
     //    glViewport(0, 0, gWindowWidth, gWindowHeight);
 
-}
-
-//-----------------------------------------------------------------------------
-// Called by GLFW when the mouse wheel is rotated
-//-----------------------------------------------------------------------------
-void glfw_onMouseScroll(GLFWwindow* window, double deltaX, double deltaY)
-{
-	double fov = fpsCamera.getFOV() + deltaY * ZOOM_SENSITIVITY;
-
-	fov = glm::clamp(fov, 1.0, 120.0);
-
-	fpsCamera.setFOV((float)fov);
 }
 
 //-----------------------------------------------------------------------------

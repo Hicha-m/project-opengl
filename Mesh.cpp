@@ -21,7 +21,7 @@ std::vector<std::string> split(std::string s, std::string t)
 	while(1)
 	{
 		size_t pos = s.find(t);
-		if(pos == -1)
+		if(pos == std::string::npos)
 		{
 			res.push_back(s); 
 			break;
