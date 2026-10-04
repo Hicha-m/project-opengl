@@ -17,7 +17,7 @@ namespace
         return {std::sin(phi) * std::cos(theta), std::cos(phi), std::sin(phi) * std::sin(theta)};
     }
 }
-EarthDamageSystem::EarthDamageSystem() : mPixels(Width * Height, 0)
+EarthDamageSystem::EarthDamageSystem() : mPixels(Width * Height, 0), mHeat(Width * Height, 0)
 {
     mDirections.reserve(mPixels.size());
     // Row zero is texture V=0 (south), without an image-file vertical flip.
@@ -50,10 +50,19 @@ void EarthDamageSystem::consume(const std::vector<MeteorImpact>& impacts, const 
         const auto center = direction(uv);
         const double radius = std::clamp(std::atan2(2.0 * impact.meteorScale, worldRadius), 0.025, 0.25);
         const float edge = float(std::cos(radius));
+        const float initialHeat = finite(impact.velocity)
+            ? float(std::clamp(glm::length(glm::dvec3(impact.velocity)) * impact.meteorScale * 0.4, 0.8, 3.0))
+            : 0.0f;
+        const float heatEdge = float(std::cos(std::min(radius * 1.5, 0.375)));
         // A spherical cap rather than a planar UV disk handles both seam and poles.
         for (std::size_t i = 0; i < mPixels.size(); ++i)
         {
             const float cosine = glm::dot(center, mDirections[i]);
+            if (cosine > heatEdge && initialHeat > 0) {
+                const float h = std::clamp((cosine - heatEdge) / (1 - heatEdge), 0.0f, 1.0f);
+                const float value = std::min(MaxHeat, mHeat[i] + initialHeat * h * h * (3 - 2 * h));
+                if (value != mHeat[i]) { mHeat[i] = value; mHeatDirty = true; }
+            }
             if (cosine <= edge) continue;
             const float t = std::clamp((cosine - edge) / (1 - edge), 0.0f, 1.0f);
             const float damage = 0.7f * t * t * (3 - 2 * t);
@@ -62,9 +71,21 @@ void EarthDamageSystem::consume(const std::vector<MeteorImpact>& impacts, const 
         }
     }
 }
+void EarthDamageSystem::update(float dt)
+{
+    if (!std::isfinite(dt) || dt <= 0) return;
+    const float factor = std::exp(-dt / CoolingTime);
+    for (float& heat : mHeat) {
+        float cooled = heat * factor;
+        if (cooled < 0.001f) cooled = 0;
+        if (cooled != heat) { heat = cooled; mHeatDirty = true; }
+    }
+}
 void EarthDamageSystem::clear()
 {
     std::fill(mPixels.begin(), mPixels.end(), 0);
+    std::fill(mHeat.begin(), mHeat.end(), 0);
+    mHeatDirty = true;
     mDirty = true; // Reset must also replace the existing GPU contents.
 }
 bool EarthDamageSystem::upload(Texture2D& texture)
@@ -73,4 +94,18 @@ bool EarthDamageSystem::upload(Texture2D& texture)
     if (!texture.updateRed(Width, Height, mPixels.data())) return false;
     mDirty = false;
     return true;
+}
+
+bool EarthDamageSystem::uploadHeat(Texture2D& texture)
+{
+    if (!mHeatDirty) return true;
+    if (!texture.updateRed(Width, Height, mHeat.data())) return false;
+    mHeatDirty = false;
+    return true;
+}
+bool EarthDamageSystem::upload(Texture2D& damage, Texture2D& heat)
+{
+    const bool damageOK = upload(damage);
+    const bool heatOK = uploadHeat(heat);
+    return damageOK && heatOK;
 }

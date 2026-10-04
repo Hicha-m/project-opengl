@@ -35,6 +35,8 @@ bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources&
     const EarthDamageSystem emptyDamage;
     if (!resources.earthDamageTexture.createRed(EarthDamageSystem::Width, EarthDamageSystem::Height,
         emptyDamage.pixels().data())) return false;
+    if (!resources.earthHeatTexture.createRed(EarthDamageSystem::Width, EarthDamageSystem::Height,
+        emptyDamage.heatPixels().data(), true)) return false;
     SceneObject earthObject("Earth",&resources.earthSphere.getMesh(),&resources.earthShader);
     earthObject.transform.position = glm::vec3(30.0f, 50.0f, 0.0f);
     earthObject.transform.scale = glm::vec3(10.0f);
@@ -43,6 +45,7 @@ bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources&
     earthObject.material.addTexture("specularMap",&resources.earthSpecularTexture,2);
     earthObject.material.addTexture("normalMap",&resources.earthNormalTexture,3);
     earthObject.material.addTexture("damageMap", &resources.earthDamageTexture, 4);
+    earthObject.material.addTexture("heatMap", &resources.earthHeatTexture, 5);
     earthObject.material.receivesLighting = true;
     scene.addObject(earthObject);
 

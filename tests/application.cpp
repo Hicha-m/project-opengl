@@ -313,6 +313,74 @@ static void checkEarthDamage()
     assert(uploaded[middle] > 0.6f && uploaded[middle+EarthDamageSystem::Width-1] > 0.6f);
 }
 
+static void checkEarthHeat()
+{
+    SceneResources resources; Scene scene; LightManager lights; Renderer renderer;
+    assert(SceneSetup::build(scene,lights,resources));
+    auto* earth = scene.findObject("Earth");
+    assert(earth->material.textures.at("heatMap").texture == &resources.earthHeatTexture);
+    DirectionalLight sun; sun.direction = {0,0,1}; sun.intensity = 0;
+    lights.setDirectionalLight(sun); // Night side, no point lights or impact flash.
+    EarthDamageSystem damage;
+    const auto eye = earth->transform.position + glm::vec3(0,0,30);
+    const auto view = glm::lookAt(eye,earth->transform.position,glm::vec3(0,1,0));
+    const auto projection = glm::ortho(-13.0f,13.0f,-9.75f,9.75f,0.1f,100.0f);
+    auto draw = [&]() {
+        assert(damage.upload(resources.earthDamageTexture,resources.earthHeatTexture));
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        renderer.renderMesh(*earth->mesh,earth->material,earth->transform,lights,view,projection,eye);
+        return pixels();
+    };
+    const auto baseline = draw();
+    auto gain = [&](const std::vector<unsigned char>& image) {
+        long sum = 0; for (std::size_t i = 0; i < image.size(); ++i) sum += int(image[i])-int(baseline[i]);
+        return sum;
+    };
+    MeteorImpact impact{earth->transform.position+glm::vec3(0,0,10),{0,0,1},{0,0,-10},0.5f};
+    damage.consume({impact},earth->transform);
+    const auto peak = draw(); assert(gain(peak) > 0);
+    capture("/tmp/earth-heat-night-peak.ppm",640,480);
+    const int center = (240*640+320)*3;
+    assert(peak[center] > 240 && peak[center+1] > 240); // Hot yellow-white center.
+    resources.earthHeatTexture.bind(5);
+    GLint format = 0; glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_INTERNAL_FORMAT,&format);
+    assert(format == GL_R32F);
+    std::vector<float> uploaded(damage.heatPixels().size());
+    glGetTexImage(GL_TEXTURE_2D,0,GL_RED,GL_FLOAT,uploaded.data());
+    assert(uploaded == damage.heatPixels()); // Values >1 survive upload without clipping.
+    resources.earthHeatTexture.unbind(5);
+    const auto permanent = damage.pixels();
+    damage.update(1.5f);
+    const auto cooled = draw(); assert(gain(cooled) > 0 && gain(cooled) < gain(peak));
+    capture("/tmp/earth-heat-night-cooled.ppm",640,480);
+    damage.consume({impact},earth->transform);
+    const auto reheated = draw(); assert(gain(reheated) > gain(cooled));
+    capture("/tmp/earth-heat-night-reheated.ppm",640,480);
+    // Heat and damage remain attached when the affected hemisphere rotates away.
+    const auto attachedHeat = damage.heatPixels();
+    earth->transform.rotation.y = glm::pi<float>();
+    const auto hidden = draw(); assert(damage.heatPixels() == attachedHeat);
+    damage.clear(); assert(draw() == hidden);
+    earth->transform.rotation.y = 0;
+    assert(draw() == baseline);
+    damage.consume({impact},earth->transform); assert(draw() == peak); // Reset image replay.
+    damage.update(30); const auto cold = draw();
+    assert(damage.pixels() == permanent && cold != peak);
+    for (float heat : damage.heatPixels()) assert(heat == 0);
+    // Once cold, burn remains visible under daylight.
+    sun.direction = {0,0,-1}; sun.intensity = 1; lights.setDirectionalLight(sun);
+    const auto coldDay = draw(); capture("/tmp/earth-heat-cold-burn.ppm",640,480);
+    damage.clear(); const auto cleanDay = draw();
+    long difference = 0;
+    for (std::size_t i = 0; i < coldDay.size(); ++i) difference += int(coldDay[i])-int(cleanDay[i]);
+    assert(difference < 0);
+    resources.earthHeatTexture.bind(5);
+    glGetTexImage(GL_TEXTURE_2D,0,GL_RED,GL_FLOAT,uploaded.data());
+    for (float heat : uploaded) assert(heat == 0);
+    resources.earthHeatTexture.unbind(5);
+    assert(glGetError() == GL_NO_ERROR);
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -331,6 +399,7 @@ int main()
     checkParticles(app.particles());
     checkTrails(app.meteors(),app.particles());
     checkEarthDamage();
+    checkEarthHeat();
     Transform meteor;
     meteor.position = {30, 50, 15};
     meteor.scale = glm::vec3(0.5f);
@@ -344,6 +413,7 @@ int main()
     assert(app.meteors().spawn(touching, {0, 0, -10}, 5));
     app.run(1);
     assert(app.impactLights().lights().size() == 1);
+    assert(*std::max_element(app.earthDamage().heatPixels().begin(),app.earthDamage().heatPixels().end()) > 0);
     assert(*std::max_element(app.earthDamage().pixels().begin(),app.earthDamage().pixels().end()) > 0);
     assert(app.particles().size() >= 48 && app.particles().particles().back().age == 0);
     assert(app.impactLights().lights()[0].intensity == app.impactLights().lights()[0].initialIntensity);
@@ -352,6 +422,7 @@ int main()
     assert(app.impactLights().lights().empty());
     assert(app.particles().size() == 0);
     for (float value : app.earthDamage().pixels()) assert(value == 0);
+    for (float value : app.earthDamage().heatPixels()) assert(value == 0);
     app.run(3);
     assert(app.meteors().size() == 0);
     {
@@ -398,12 +469,12 @@ int main()
         std::vector<std::vector<MeteorImpact>> firstImpacts;
         std::vector<std::vector<ImpactLight>> firstLights;
         std::vector<std::vector<Particle>> firstParticles;
-        std::vector<std::vector<float>> firstDamage;
+        std::vector<std::vector<float>> firstDamage, firstHeat;
         for (int pass = 0; pass < 2; ++pass)
         {
             MainSequence::reset(timeline, shower, meteors);
             flashes.clear();
-            damage.clear(); assert(damage.upload(resources.earthDamageTexture));
+            damage.clear(); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
             particles.clear(); particleEmitter.reset(); trails.reset();
             flashes.publish(lights);
             timeline.play();
@@ -418,8 +489,9 @@ int main()
                     meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
                     particles.update(0.25f);
                     trails.update(meteors.meteors(), 0.25f);
+                    damage.update(0.25f);
                     damage.consume(meteors.impacts(),scene.findObject("Earth")->transform);
-                    assert(damage.upload(resources.earthDamageTexture));
+                    assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
                     particleEmitter.consume(meteors.impacts());
                     flashes.consume(meteors.impacts());
                     flashes.update(0.25f);
@@ -447,8 +519,8 @@ int main()
                         assert(a.velocity == b.velocity && a.meteorScale == b.meteorScale);
                     }
                 }
-                if (pass == 0) firstDamage.push_back(damage.pixels());
-                else assert(damage.pixels() == firstDamage[frame]);
+                if (pass == 0) { firstDamage.push_back(damage.pixels()); firstHeat.push_back(damage.heatPixels()); }
+                else { assert(damage.pixels() == firstDamage[frame]); assert(damage.heatPixels() == firstHeat[frame]); }
                 if (pass == 0) firstParticles.push_back(particles.particles());
                 else {
                     assert(particles.size() == firstParticles[frame].size());
@@ -502,7 +574,7 @@ int main()
             assert(imageIndex == 6 && !timeline.isPlaying() && timeline.getTime() == 30);
             assert(impactCount > 0);
         }
-        damage.clear(); assert(damage.upload(resources.earthDamageTexture));
+        damage.clear(); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
         // Controlled visible contact in front of the rendered Earth.
         MainSequence::reset(timeline, shower, meteors);
         flashes.clear();
@@ -596,6 +668,7 @@ int main()
     assert(app.impactLights().lights().empty());
     assert(app.particles().size() == 0);
     for (float value : app.earthDamage().pixels()) assert(value == 0);
+    for (float value : app.earthDamage().heatPixels()) assert(value == 0);
     assert(glfwGetCurrentContext() == nullptr);
     assert(app.init());
     assert(app.meteors().size() == 0 && app.meteors().graphicsReady());
@@ -634,5 +707,5 @@ int main()
     std::filesystem::remove_all(empty);
     assert(app.init());
     app.run(3);
-    std::cout << "Application lifecycle, Earth damage, meteor trails, impacts and cinematic image replay checks passed\n";
+    std::cout << "Application lifecycle, Earth burn/heat, meteor trails and cinematic image replay checks passed\n";
 } // Application destructor also releases resources before GLFW.

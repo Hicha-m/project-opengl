@@ -108,7 +108,7 @@ void Texture2D::unbind(GLuint texUnit)
 }
 
 // Preserve the caller's active unit, binding and pixel packing settings.
-bool Texture2D::createRed(int width, int height, const float* pixels)
+bool Texture2D::createRed(int width, int height, const float* pixels, bool floatingPoint)
 {
     if (width <= 0 || height <= 0 || !pixels) return false;
     GLint binding, alignment;
@@ -121,7 +121,7 @@ bool Texture2D::createRed(int width, int height, const float* pixels)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_FLOAT, pixels);
+    glTexImage2D(GL_TEXTURE_2D, 0, floatingPoint ? GL_R32F : GL_R8, width, height, 0, GL_RED, GL_FLOAT, pixels);
     glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
     glBindTexture(GL_TEXTURE_2D, binding);
     mRedWidth = width; mRedHeight = height;

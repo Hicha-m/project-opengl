@@ -132,8 +132,9 @@ void Application::update(float deltaTime)
     mParticleSystem.update(deltaTime);
     mMeteorTrailEmitter.update(mMeteorSystem.meteors(), deltaTime);
     const auto* earth = mScene.findObject("Earth");
+    mEarthDamageSystem.update(deltaTime);
     mEarthDamageSystem.consume(mMeteorSystem.impacts(), earth->transform, mResources->earthSphere.getRadius());
-    mEarthDamageSystem.upload(mResources->earthDamageTexture);
+    mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
     mImpactParticleEmitter.consume(mMeteorSystem.impacts());
     mImpactLightSystem.consume(mMeteorSystem.impacts());
     mImpactLightSystem.update(deltaTime);
@@ -255,7 +256,7 @@ void Application::restartSequence()
     mMeteorTrailEmitter.reset();
     mImpactLightSystem.publish(mLightManager);
     mEarthDamageSystem.clear();
-    mEarthDamageSystem.upload(mResources->earthDamageTexture);
+    mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
     mTimeline.play();
     mDebugTimer = 0;
 }

@@ -20,6 +20,7 @@ uniform sampler2D nightMap;
 uniform sampler2D specularMap;
 uniform sampler2D normalMap;
 uniform sampler2D damageMap;
+uniform sampler2D heatMap;
 
 
 // --------------------------------------------------
@@ -259,6 +260,14 @@ void main()
     // Persistent local-UV scorch mask dims surface, city lights and specular.
     float damage = texture(damageMap, TexCoord).r;
     color *= mix(vec3(1.0), vec3(0.12, 0.09, 0.07), damage);
+
+    // Emission is added after lighting and scorch: visible even on the night side.
+    float heat = max(texture(heatMap, TexCoord).r, 0.0);
+    vec3 thermal = mix(vec3(1.0, 0.025, 0.002), vec3(1.0, 0.28, 0.015),
+        smoothstep(0.05, 0.65, heat));
+    thermal = mix(thermal, vec3(1.0, 0.8, 0.12), smoothstep(0.65, 1.5, heat));
+    thermal = mix(thermal, vec3(1.0, 0.98, 0.85), smoothstep(1.5, 2.8, heat));
+    color += thermal * heat;
 
     frag_color =
         vec4(color, 1.0);

@@ -112,8 +112,8 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `systems/ImpactLightSystem` | Consomme les impacts sans connaître la Terre ni MeteorSystem. Crée les flashes, les fait décroître et publie les lumières temporaires au LightManager. |
 | `systems/MeteorTrailEmitter` | Observe les météores en lecture seule, échantillonne leurs segments par distance et émet dans ParticleSystem ; état et RNG par MeteorId. |
 | `tests/meteor_trail.cpp` | Vérifie densité à 30/60/144 FPS, grandes frames, vieillissement dans la frame, suppressions, réallocations et replay. |
-| `systems/EarthDamageSystem` | Consomme les impacts, transforme leurs positions monde en UV locales et accumule des marques circulaires dans une carte CPU persistante. Envoie la carte modifiée à la texture terrestre. |
-| `tests/earth_damage.cpp` | Vérifie les UV du mesh, translation/rotation/échelle, accumulation, saturation, couture U, pôles et reset sans contexte OpenGL. |
+| `systems/EarthDamageSystem` | Consomme les impacts, transforme leurs positions monde en UV locales et accumule les dégâts permanents et la chaleur temporaire dans deux cartes CPU. Refroidit la chaleur et envoie les cartes modifiées aux textures terrestres. |
+| `tests/earth_damage.cpp` | Vérifie UV, rotation, accumulation, saturation, couture, pôles, refroidissement et replay sans contexte OpenGL. |
 | `systems/Particle.h` | Données runtime : position, vitesse, taille monde, âge et durée de vie. |
 | `systems/ParticleSystem` | Stocke, déplace et expire les particules sur CPU ; délègue le rendu sans dépendre des météores ou de SceneObject. |
 | `systems/ParticleEmitter` | Burst générique dans un cône : nombre, vitesse, taille, lifetime et seed configurables ; RNG réinitialisable. |
@@ -227,7 +227,7 @@ nocturnes et les reflets ; la carte vide conserve l'apparence initiale.
 La fermeture efface aussi l'état CPU et libère la texture avec les autres
 ressources avant la destruction du contexte. Aucun changement n'a été apporté
 aux systèmes de météores, de flashes ou de particules pour gérer les dégâts.
-Cette étape n'ajoute ni incandescence, ni fissures, ni modification de géométrie.
+La phase 4.8.1 conserve la géométrie ; la chaleur temporaire est ajoutée en 4.8.2.
 
 `make test-runtime` vérifie les texels réellement envoyés au GPU,
 l'assombrissement, l'accumulation, la couture, la disparition du marqueur de
@@ -235,6 +235,47 @@ la face visible après rotation et la restauration de l'image après reset.
 Il compare aussi les cartes CPU et les images de deux relectures complètes.
 Captures : `/tmp/earth-damage-before.ppm`, `/tmp/earth-damage-burned.ppm`
 et `/tmp/earth-damage-accumulated.ppm`.
+
+## Incandescence de surface — phase 4.8.2
+
+`EarthDamageSystem` conserve désormais une `heatMap` temporaire à côté de la
+`damageMap` permanente. Les deux cartes partagent la conversion monde/local/UV,
+la résolution 512 × 256 et la distance sphérique, y compris aux pôles et à la
+couture U. L'empreinte thermique est 1,5 fois plus large que la marque brûlée.
+La chaleur initiale vaut `clamp(speed * meteorScale * 0.4, 0.8, 3)` et les
+impacts proches s'additionnent jusqu'à un maximum de 6 par texel.
+
+`update(dt)` refroidit la chaleur existante avant la consommation des nouveaux
+impacts : `heat *= exp(-dt / 1.5)`. Les valeurs inférieures à 0,001 sont remises
+à zéro. Les nouveaux impacts sont donc visibles à leur chaleur initiale, même
+sur une frame longue. Le refroidissement ne modifie jamais la damage map.
+
+`SceneResources` possède `earthHeatTexture`, au format `GL_R32F`, sur l'unité 5
+sous le sampler `heatMap`. Ce format conserve l'accumulation au-delà de 1.
+Chaque carte possède son propre indicateur de modification : une carte de dégâts
+inchangée n'est pas renvoyée pendant le refroidissement. Les deux textures
+utilisent les mêmes règles de wrapping et de filtrage.
+
+Le shader ajoute l'émission thermique après l'éclairage et les dégâts. La
+palette va du rouge au bord vers orange, jaune puis blanc-jaune au centre le
+plus chaud. L'émission reste visible côté nuit sans Soleil ni flash ponctuel.
+Les valeurs lumineuses dépassent 1 dans le shader et sont limitées par le
+framebuffer actuel ; aucun pipeline HDR ou bloom n'est ajouté à cette phase.
+Après refroidissement, seule la marque brûlée persiste.
+
+`R` efface et renvoie les deux cartes au GPU. Les tests CPU vérifient le
+refroidissement à 30/60/144 FPS, l'accumulation, les limites, la couture, la
+rotation et le replay. Les tests OpenGL vérifient les valeurs thermiques
+réellement uploadées, le centre jaune-blanc côté nuit, le refroidissement,
+le réchauffement par un second impact, les dégâts après refroidissement et
+le replay des deux cartes et des images de la cinématique.
+Captures : `/tmp/earth-heat-night-peak.ppm`, `/tmp/earth-heat-night-cooled.ppm`,
+`/tmp/earth-heat-night-reheated.ppm` et `/tmp/earth-heat-cold-burn.ppm`.
+
+Les étapes suivantes restent successives : 4.8.3 ajoutera le niveau de
+destruction global, 4.8.4 les fissures émissives et 4.8.5 la rupture avec
+fragments préparés, noyau blanc, éclairage du noyau et bloom. Elles ne sont
+pas implémentées par la phase 4.8.2.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
