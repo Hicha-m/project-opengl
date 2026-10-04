@@ -1,4 +1,5 @@
 #include "audio/MusicPlayer.h"
+#include "platform/ResourcePaths.h"
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <iostream>
@@ -10,7 +11,8 @@ bool MusicPlayer::load(const std::string& path) {
     if(!SDL_InitSubSystem(SDL_INIT_AUDIO)) return false;
     mInitialized=true;
     SDL_AudioSpec spec{}; Uint8* data=nullptr; Uint32 length=0;
-    if(!SDL_LoadWAV(path.c_str(),&spec,&data,&length)) { release(); return false; }
+    const auto filename = ResourcePaths::resolve(path).u8string();
+    if(!SDL_LoadWAV(filename.c_str(),&spec,&data,&length)) { release(); return false; }
     mPCM.assign(data,data+length); SDL_free(data);
     mBytesPerFrame=spec.channels*(SDL_AUDIO_BITSIZE(spec.format)/8);
     mBytesPerSecond=double(spec.freq)*mBytesPerFrame;
@@ -86,7 +88,8 @@ bool MusicPlayer::loadImpact(const std::string& path) {
     mImpactPCM.clear(); mLastImpactTime=-1; mNextVoice=mImpactPlayCount=0;
     if(!mStream) return false;
     SDL_AudioSpec source{},output{}; Uint8* data=nullptr; Uint32 length=0;
-    if(!SDL_LoadWAV(path.c_str(),&source,&data,&length)) return false;
+    const auto filename = ResourcePaths::resolve(path).u8string();
+    if(!SDL_LoadWAV(filename.c_str(),&source,&data,&length)) return false;
     mImpactPCM.assign(data,data+length); SDL_free(data);
     if(mImpactPCM.empty() || !SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(mStream),&output,nullptr)) { mImpactPCM.clear(); return false; }
     for(auto& voice:mVoices) {

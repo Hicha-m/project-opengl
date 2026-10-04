@@ -1,0 +1,2 @@
+# Preserve upstream headers and license notices byte for byte.
+third_party/** -whitespace

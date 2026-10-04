@@ -2,6 +2,7 @@
 // GLSL shader manager class
 //-----------------------------------------------------------------------------
 #include "graphics/ShaderProgram.h"
+#include "platform/ResourcePaths.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -87,7 +88,7 @@ string ShaderProgram::fileToString(const string& filename)
     file.exceptions (std::ifstream::failbit | std::ifstream::badbit);
 	try
 	{
-		file.open(filename, std::ios::in);
+		file.open(ResourcePaths::resolve(filename), std::ios::in);
 
 		if (!file.fail())
 		{

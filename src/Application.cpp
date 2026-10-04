@@ -47,11 +47,12 @@ bool Application::init()
         shutdown();
         return false;
     }
-    if(mOptions.music && mOptions.visible && mMusic.load("build/music/cinematic.wav"))
+    if(mOptions.music && mMusic.load("build/music/cinematic.wav"))
     {
         mTimeline.setDuration(mMusic.duration());
         if(!mMusic.loadImpact("build/music/impact.wav")) std::cerr<<"Impact sound unavailable\n";
     }
+    else if (mOptions.music) std::cerr << "Music unavailable; continuing without audio\n";
     mFPSStart = glfwGetTime();
     mInitialized = true;
     return true;
@@ -60,8 +61,22 @@ bool Application::init()
 bool Application::initOpenGL()
 {
     if (mOptions.width <= 0 || mOptions.height <= 0) return false;
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-    if (!glfwInit())
+    // Let GLFW select Win32, Cocoa, X11 or Wayland according to the host.
+    glfwSetErrorCallback([](int code, const char* description) {
+        std::cerr << "GLFW error " << code << ": " << description << '\n';
+    });
+#if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
+    glfwInitHint(GLFW_PLATFORM, mOptions.softwareContext ? GLFW_PLATFORM_NULL : GLFW_ANY_PLATFORM);
+#endif
+    bool initialized = glfwInit() == GLFW_TRUE;
+#if defined(__linux__) && (GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4))
+    // A stale Wayland socket can coexist with a working X11/XWayland display.
+    if (!initialized && !mOptions.softwareContext && glfwPlatformSupported(GLFW_PLATFORM_X11)) {
+        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+        initialized = glfwInit() == GLFW_TRUE;
+    }
+#endif
+    if (!initialized)
     {
         std::cerr << "GLFW initialization failed\n";
         return false;
@@ -70,7 +85,8 @@ bool Application::initOpenGL()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, mOptions.softwareContext ? GLFW_FALSE : GLFW_TRUE);
+    if (mOptions.softwareContext) glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_OSMESA_CONTEXT_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_VISIBLE, mOptions.visible ? GLFW_TRUE : GLFW_FALSE);
 
@@ -91,14 +107,11 @@ bool Application::initOpenGL()
         return false;
     }
     glfwMakeContextCurrent(mWindow);
-    glewExperimental = GL_TRUE;
-    if (glewInit() != GLEW_OK)
+    if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress)) || !GLAD_GL_VERSION_3_3)
     {
-        std::cerr << "Failed to initialize GLEW\n";
+        std::cerr << "Failed to load OpenGL 3.3 functions\n";
         return false;
     }
-    // GLEW may leave GL_INVALID_ENUM when probing a core context.
-    while (glGetError() != GL_NO_ERROR) {}
     glfwSetWindowUserPointer(mWindow, this);
     glfwSetKeyCallback(mWindow, keyCallback);
     glfwSetFramebufferSizeCallback(mWindow, framebufferCallback);

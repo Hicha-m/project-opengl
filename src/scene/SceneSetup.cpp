@@ -1,4 +1,5 @@
 #include "scene/SceneSetup.h"
+#include "platform/ResourcePaths.h"
 #include <stdexcept>
 #include "systems/EarthDamageSystem.h"
 #include "systems/SolarSystem.h"
@@ -25,7 +26,7 @@ namespace
             || !r.shuttleSource.loadOBJ("models/shuttle/shuttle.obj")) return false;
         struct Surface { glm::vec3 color{0.8f}; float metal=0, rough=0.7f; std::string diffuse,normal; };
         std::unordered_map<std::string,Surface> surfaces;
-        std::ifstream file("models/shuttle/shuttle.mtl");
+        std::ifstream file(ResourcePaths::resolve("models/shuttle/shuttle.mtl"));
         if(!file) return false;
         std::string line,name;
         while(std::getline(file,line)) {

@@ -22,6 +22,7 @@ public:
     unsigned impactPlayCount() const { return mImpactPlayCount; }
     void release();
     bool ready() const { return mStream!=nullptr; }
+    bool impactReady() const { return !mImpactPCM.empty(); }
     bool running() const { return mRunning; }
     float duration() const { return mDuration; }
     float position();

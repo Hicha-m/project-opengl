@@ -2,6 +2,7 @@
 // Basic Mesh class
 //-----------------------------------------------------------------------------
 #include "graphics/Mesh.h"
+#include "platform/ResourcePaths.h"
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -55,7 +56,7 @@ if (mVBO != 0) glDeleteBuffers(1, &mVBO);
 // owned by the scene. Parse into temporary data: failure preserves a loaded mesh.
 bool Mesh::loadOBJ(const std::string& filename)
 {
-    std::ifstream input(filename);
+    std::ifstream input(ResourcePaths::resolve(filename));
     if(!input) { std::cerr<<"Cannot open "<<filename<<"\n"; return false; }
     std::vector<glm::vec3> positions,normals;
     std::vector<glm::vec2> uvs;
@@ -193,4 +194,3 @@ void Mesh::draw()
 	glDrawArrays(GL_TRIANGLES, 0, mVertices.size());
 	glBindVertexArray(0);
 }
-

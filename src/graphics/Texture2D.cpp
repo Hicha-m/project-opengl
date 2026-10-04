@@ -2,10 +2,12 @@
 // Simple 2D texture class
 //-----------------------------------------------------------------------------
 #include "graphics/Texture2D.h"
+#include "platform/ResourcePaths.h"
 #include <iostream>
 #include <cassert>
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
+#define STBI_WINDOWS_UTF8
+#include "stb_image.h"
 
 //-----------------------------------------------------------------------------
 // Constructor
@@ -33,7 +35,8 @@ bool Texture2D::loadTexture(const string& fileName, bool generateMipMaps)
 	int width, height, components;
 
 	// Use stbi image library to load our image
-	unsigned char* imageData = stbi_load(fileName.c_str(), &width, &height, &components, STBI_rgb_alpha);
+	const auto filename = ResourcePaths::resolve(fileName).u8string();
+	unsigned char* imageData = stbi_load(filename.c_str(), &width, &height, &components, STBI_rgb_alpha);
 
 	if (imageData == NULL)
 	{
