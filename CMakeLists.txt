@@ -151,7 +151,7 @@ install(DIRECTORY third_party/ DESTINATION licenses
 if(BUNDLE_RUNTIME_DEPENDENCIES)
     if(APPLE)
         # Rewrites dylib paths to the relocated .app instead of Homebrew/build paths.
-        install(CODE "include(BundleUtilities)\nfixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/project.app\" \"\" \"\")")
+        install(CODE "include(BundleUtilities)\nfixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/project.app\" \"\" \"$<TARGET_FILE_DIR:SDL3::SDL3>;$<TARGET_FILE_DIR:glfw>;$<TARGET_FILE_DIR:GLEW::GLEW>\")")
         # Ad-hoc signing allows the modified bundle to launch on Apple Silicon.
         install(CODE "execute_process(COMMAND codesign --force --deep --sign - \"\${CMAKE_INSTALL_PREFIX}/project.app\" COMMAND_ERROR_IS_FATAL ANY)")
     elseif(WIN32)

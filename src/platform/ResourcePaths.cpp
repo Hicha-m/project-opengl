@@ -17,12 +17,16 @@ std::filesystem::path locateResources() {
 }
 
 std::filesystem::path& resourceRoot() {
-    static std::filesystem::path directory = locateResources();
+    static std::filesystem::path directory;
     return directory;
 }
 }
 
-const std::filesystem::path& ResourcePaths::root() { return resourceRoot(); }
+const std::filesystem::path& ResourcePaths::root() {
+    auto& directory = resourceRoot();
+    if (directory.empty()) directory = locateResources();
+    return directory;
+}
 
 std::filesystem::path ResourcePaths::resolve(const std::string& relative) {
     const auto path = std::filesystem::u8path(relative);

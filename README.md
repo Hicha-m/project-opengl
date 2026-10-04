@@ -205,7 +205,7 @@ The container desktop launch is intended for Linux hosts.
 
 ## GitHub Actions (CI/CD)
 
-[The workflow](.github/workflows/cmake-multi-platform.yml) runs on pushes,
+[The workflow](.github/workflows/cmake-multi-platform.yml) runs on default-branch pushes,
 pull requests and manual triggers:
 
 - Debug and Release builds with Clang on Linux and macOS Apple Silicon, plus
