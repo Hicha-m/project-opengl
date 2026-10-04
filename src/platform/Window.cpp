@@ -31,6 +31,17 @@ struct Window {
 #ifdef PROJECT_MOBILE
 namespace {
 Window* active = nullptr;
+SDL_Rect controlSafeArea(Window* window) {
+    SDL_Rect area{};
+    if (!SDL_GetWindowSafeArea(window->native, &area)) SDL_GetWindowSize(window->native, &area.w, &area.h);
+    return area;
+}
+int touchKey(Window* window, float x, float y) {
+    const auto area = controlSafeArea(window);
+    if (area.w <= 0 || area.h <= 0 || x < area.x || x >= area.x + area.w || y < area.y + area.h * 0.86f || y > area.y + area.h) return 0;
+    const int buttons[] = {Space, R, Left, Right, M};
+    return buttons[std::clamp(int((x - area.x) / area.w * 5), 0, 4)];
+}
 int translate(SDL_Keycode code) {
     switch (code) {
         case SDLK_ESCAPE: return Escape;
@@ -207,16 +218,13 @@ void pollEvents() {
             if (active->resize) active->resize(active, event.window.data1, event.window.data2);
         } else if (event.type == SDL_EVENT_RENDER_DEVICE_RESET) {
             std::cerr << "Graphics context lost; restart the application\n"; active->closed = true;
-        } else if (event.type == SDL_EVENT_FINGER_DOWN && event.tfinger.y > 0.86f) {
-            const int buttons[] = {Space, R, Left, Right, M};
-            const int button = std::clamp(int(event.tfinger.x * 5), 0, 4);
-            if (active->keys) active->keys(active, buttons[button], 0, Press, 0);
-        } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.which != SDL_TOUCH_MOUSEID) {
+        } else if (event.type == SDL_EVENT_FINGER_DOWN) {
             int width, height; size(active, &width, &height);
-            if(event.button.y > height*0.86f && width>0) {
-                const int buttons[] = {Space,R,Left,Right,M};
-                if(active->keys) active->keys(active,buttons[std::clamp(int(event.button.x/width*5),0,4)],0,Press,0);
-            }
+            const auto button = touchKey(active, event.tfinger.x * width, event.tfinger.y * height);
+            if (button && active->keys) active->keys(active, button, 0, Press, 0);
+        } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.which != SDL_TOUCH_MOUSEID) {
+            const auto button = touchKey(active, event.button.x, event.button.y);
+            if (button && active->keys) active->keys(active, button, 0, Press, 0);
         } else if (event.type == SDL_EVENT_FINGER_MOTION && event.tfinger.y <= 0.86f) {
             int width, height; size(active, &width, &height);
             active->mouseX += event.tfinger.dx * width; active->mouseY += event.tfinger.dy * height;
@@ -322,12 +330,16 @@ void drawControls(Window* window, bool paused, bool muted) {
         }
     };
     const char* labels[] = {paused ? "PLAY" : "PAUSE", "RESTART", "-10", "+10", "MUTE"};
-    const float cell = width/5.0f, bar = height*0.14f;
+    int logicalWidth, logicalHeight; size(window, &logicalWidth, &logicalHeight);
+    const auto safe = controlSafeArea(window);
+    const float scaleX = float(width) / std::max(1, logicalWidth), scaleY = float(height) / std::max(1, logicalHeight);
+    const float left = safe.x * scaleX, bottom = height - (safe.y + safe.h) * scaleY;
+    const float cell = safe.w * scaleX / 5.0f, bar = safe.h * scaleY * 0.14f;
     const float scale = std::max(1.0f, std::min(cell*0.78f/42, bar*0.45f/7));
     for (int i=0; i<5; ++i) {
-        rectangle(i*cell+2, 0, cell-4, bar, {0.02f,0.03f,0.06f,0.92f});
+        rectangle(left+i*cell+2, bottom, cell-4, bar, {0.02f,0.03f,0.06f,0.92f});
         const std::string label=labels[i];
-        const float x = i*cell + (cell-label.size()*6*scale)/2, y = (bar-7*scale)/2;
+        const float x = left+i*cell + (cell-label.size()*6*scale)/2, y = bottom+(bar-7*scale)/2;
         const std::array<float,4> tint = (i==4 && muted) ? std::array<float,4>{1,0.68f,0.22f,1} : std::array<float,4>{0.88f,0.91f,1,1};
         for (std::size_t c=0;c<label.size();++c) {
             const auto rows=glyph(label[c]);

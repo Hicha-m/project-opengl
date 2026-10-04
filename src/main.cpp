@@ -33,7 +33,12 @@ void mobileTest(Application& app) {
     require(imageAvailable(), "Mobile test: blank scene or GL error");
     auto tap = [&](int button) {
         SDL_Event event{}; event.type = SDL_EVENT_FINGER_DOWN;
-        event.tfinger.x = (button + 0.5f) / 5.0f; event.tfinger.y = 0.93f;
+        auto* window = SDL_GL_GetCurrentWindow();
+        int width, height; SDL_GetWindowSize(window, &width, &height);
+        SDL_Rect safe{};
+        if (!SDL_GetWindowSafeArea(window, &safe)) { safe.w = width; safe.h = height; }
+        event.tfinger.x = (safe.x + safe.w * (button + 0.5f) / 5.0f) / width;
+        event.tfinger.y = (safe.y + safe.h * 0.93f) / height;
         require(SDL_PushEvent(&event), "Cannot inject touch event"); app.run(1, false);
     };
     tap(0); require(app.sequencePaused(), "Pause touch failed");
