@@ -27,6 +27,7 @@ struct ApplicationOptions
     bool fullscreen = false;
     bool visible = true;
     bool music = true;
+    bool softwareContext = false; // Headless OSMesa verification, no desktop GPU required.
 };
 
 class Application

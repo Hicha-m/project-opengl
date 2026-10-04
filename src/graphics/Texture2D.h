@@ -4,7 +4,7 @@
 #ifndef TEXTURE2D_H
 #define TEXTURE2D_H
 
-#include "GL/glew.h"
+#include <glad/gl.h>
 #include <string>
 using std::string;
 

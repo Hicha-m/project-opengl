@@ -7,7 +7,7 @@
 #include <iostream>
 #include <cmath>
 #include <stdexcept>
-#include <GL/glew.h>
+#include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include "Application.h"

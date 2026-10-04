@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 if(POLICY CMP0177)
     cmake_policy(SET CMP0177 NEW)
 endif()
-project(OpenGLSpaceCinematic VERSION 1.0.0 LANGUAGES CXX)
+project(OpenGLSpaceCinematic VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,10 +13,12 @@ option(BUNDLE_RUNTIME_DEPENDENCIES "Include desktop libraries in distributable p
 
 find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
-find_package(GLEW REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(SDL3 3.2 CONFIG REQUIRED)
 find_program(FFMPEG_EXECUTABLE ffmpeg REQUIRED)
+
+add_library(glad STATIC third_party/glad/src/gl.c)
+target_include_directories(glad PUBLIC third_party/glad/include)
 
 add_library(project_core STATIC
     src/platform/ResourcePaths.cpp
@@ -50,7 +52,8 @@ add_library(project_core STATIC
 )
 target_include_directories(project_core PUBLIC src)
 target_include_directories(project_core SYSTEM PRIVATE third_party/stb)
-target_link_libraries(project_core PUBLIC OpenGL::GL glfw GLEW::GLEW glm::glm SDL3::SDL3)
+target_link_libraries(project_core PUBLIC OpenGL::GL glfw glad glm::glm SDL3::SDL3)
+target_compile_definitions(project_core PUBLIC GLFW_INCLUDE_NONE)
 if(MSVC)
     target_compile_options(project_core PRIVATE /W4 /utf-8)
 else()
@@ -151,7 +154,7 @@ install(DIRECTORY third_party/ DESTINATION licenses
 if(BUNDLE_RUNTIME_DEPENDENCIES)
     if(APPLE)
         # Rewrites dylib paths to the relocated .app instead of Homebrew/build paths.
-        install(CODE "include(BundleUtilities)\nfixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/project.app\" \"\" \"$<TARGET_FILE_DIR:SDL3::SDL3>;$<TARGET_FILE_DIR:glfw>;$<TARGET_FILE_DIR:GLEW::GLEW>\")")
+        install(CODE "include(BundleUtilities)\nfixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/project.app\" \"\" \"$<TARGET_FILE_DIR:SDL3::SDL3>;$<TARGET_FILE_DIR:glfw>\")")
         # Ad-hoc signing allows the modified bundle to launch on Apple Silicon.
         install(CODE "execute_process(COMMAND codesign --force --deep --sign - \"\${CMAKE_INSTALL_PREFIX}/project.app\" COMMAND_ERROR_IS_FATAL ANY)")
     elseif(WIN32)
@@ -166,7 +169,7 @@ if(BUNDLE_RUNTIME_DEPENDENCIES)
     else()
         # Graphics drivers and OS libraries come from the host; bundle our desktop libraries.
         install(RUNTIME_DEPENDENCY_SET application_dependencies
-            PRE_INCLUDE_REGEXES "^lib(SDL3|glfw|GLEW)\\.so.*"
+            PRE_INCLUDE_REGEXES "^lib(SDL3|glfw)\\.so.*"
             PRE_EXCLUDE_REGEXES ".*"
             LIBRARY DESTINATION lib)
     endif()

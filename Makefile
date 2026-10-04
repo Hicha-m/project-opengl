@@ -1,7 +1,7 @@
 CXX := g++
-CPPFLAGS := -Isrc -Ithird_party/stb $(shell pkg-config --cflags glfw3 glew sdl3)
+CPPFLAGS := -Isrc -Ithird_party/stb -Ithird_party/glad/include -DGLFW_INCLUDE_NONE $(shell pkg-config --cflags glfw3 sdl3)
 CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -std=c++17
-LDLIBS := $(shell pkg-config --libs glfw3 glew sdl3) -lGL
+LDLIBS := $(shell pkg-config --libs glfw3 sdl3) -lGL
 
 TARGET := project
 SCENE ?= src/main
@@ -39,7 +39,7 @@ COMMON_SRC := \
 	src/animation/Easing.cpp \
 	src/animation/Timeline.cpp
 
-COMMON_OBJ := $(COMMON_SRC:%.cpp=$(BUILD_DIR)/%.o)
+COMMON_OBJ := $(COMMON_SRC:%.cpp=$(BUILD_DIR)/%.o) $(BUILD_DIR)/third_party/glad/src/gl.o
 MAIN_OBJ := $(BUILD_DIR)/$(SCENE).o
 TEST_NAMES := music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application
 TEST_OBJ := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%.o)
@@ -63,6 +63,10 @@ $(TARGET): $(MAIN_OBJ) $(COMMON_OBJ) | $(MUSIC_WAV) $(IMPACT_WAV)
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) -MMD -MP -c $< -o $@
 
 $(TEST_BIN): $(BUILD_DIR)/tests/%: $(BUILD_DIR)/tests/%.o $(COMMON_OBJ)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)

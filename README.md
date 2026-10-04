@@ -70,29 +70,29 @@ The application reports unavailable audio and can continue without sound.
 Do not set `SDL_AUDIO_DRIVER=dummy` when you want audible playback.
 
 macOS packages are ad-hoc signed, not Apple-notarized. Linux packages include
-SDL3, GLFW and GLEW; system libraries and graphics drivers come from the host.
+SDL3, GLFW; system libraries and graphics drivers come from the host.
 The CI packages target the runner's operating system baseline, rather than every
 historical OS release. Rebuild from source for a different Linux baseline.
 
 ## Requirements for building
 
 - C++17 compiler and CMake 3.21+ (GNU Make is also available on Linux).
-- OpenGL, GLFW 3.3+, GLEW, GLM and SDL3 3.2+ development packages.
+- OpenGL, GLFW 3.3+, GLM and SDL3 3.2+ development packages.
 - FFmpeg on `PATH` to convert the supplied MP3 files.
-- `stb_image` is included in `third_party/`; no system stb package is needed.
+- `stb_image` and the GLAD OpenGL loader are included in `third_party/`.
 
 ### Linux and macOS (CMake)
 
 On Fedora:
 
 ```bash
-sudo dnf install gcc-c++ cmake make glfw-devel glew-devel glm-devel SDL3-devel ffmpeg
+sudo dnf install gcc-c++ cmake make glfw-devel glm-devel SDL3-devel ffmpeg
 ```
 
 On macOS:
 
 ```bash
-brew install cmake glfw glew glm sdl3 ffmpeg
+brew install cmake glfw glm sdl3 ffmpeg
 ```
 
 Ubuntu 24.04 requires SDL3 to be built from source; the Dockerfile and GitHub
@@ -154,6 +154,8 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build/cmake -L runtime --ou
 music and impact audio initialization, and renders three frames. Set
 `SDL_AUDIO_DRIVER=dummy` for automated testing. This verifies the playback code;
 it cannot confirm what a user hears from a physical speaker.
+`--smoke-test --software-context` uses GLFW 3.4+ and an installed OSMesa library
+for graphical verification on machines without a display or native GPU.
 
 ### GNU Make
 
@@ -214,7 +216,9 @@ pull requests and manual triggers:
   and WAV playback from Unicode paths.
 - The complete OpenGL integration suite on Linux with Xvfb and Mesa.
 - Package extraction and scene/audio/rendering startup on every desktop target
-  from an unrelated working directory and a Unicode installation path.
+  from an unrelated working directory and a Unicode installation path. macOS
+  runners lack a suitable native OpenGL GPU, so their rendering test uses an
+  explicit headless OSMesa context. Normal macOS launches use Cocoa/OpenGL.
 - Windows CI uses a checksum-verified Mesa software renderer for its startup
   test; it is not included in the distributed application.
 - Verified Release packages are uploaded as downloadable artifacts.

@@ -6,7 +6,7 @@
 
 #include <string>
 #include <map>
-#include "GL/glew.h"
+#include <glad/gl.h>
 #include "glm/glm.hpp"
 using std::string;
 
@@ -46,7 +46,7 @@ private:
 	string fileToString(const string& filename);
 	void  checkCompileErrors(GLuint shader, ShaderType type);
 
-	
+
 	GLuint mHandle;
 	std::map<string, GLint> mUniformLocations;
 };

@@ -10,6 +10,7 @@ import tempfile
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("packages", type=Path)
 parser.add_argument("--mesa", type=Path, help="Windows CI software renderer; never added to the archive")
+parser.add_argument("--software-context", action="store_true", help="OSMesa test on macOS runners without a GPU")
 args = parser.parse_args()
 archives = sorted(args.packages.glob("*.zip")) + sorted(args.packages.glob("*.tar.gz"))
 if len(archives) != 1:
@@ -36,13 +37,16 @@ with tempfile.TemporaryDirectory(prefix="space-étoiles-") as directory:
     if os.name == "posix" and ".app" not in str(executable):
         libraries = subprocess.check_output(["ldd", "./project"], cwd=executable.parent, text=True)
         print(libraries, flush=True)
-        for name in ("libSDL3", "libglfw", "libGLEW"):
+        for name in ("libSDL3", "libglfw"):
             lines = [line for line in libraries.splitlines() if name in line]
             if not lines or any(str(relocated) not in line for line in lines):
                 raise SystemExit(f"{name} must load from the package")
     if ".app/Contents/MacOS/" in executable.as_posix():
         bundle = executable.parent.parent.parent
         subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
-    subprocess.run([str(executable), "--smoke-test"], cwd=directory,
+    command = [str(executable), "--smoke-test"]
+    if args.software_context:
+        command.append("--software-context")
+    subprocess.run(command, cwd=directory,
                    env=environment, check=True, timeout=120)
     print(f"Verified relocated package: {archives[0].name}")

@@ -66,12 +66,12 @@ bool Application::initOpenGL()
         std::cerr << "GLFW error " << code << ": " << description << '\n';
     });
 #if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
-    glfwInitHint(GLFW_PLATFORM, GLFW_ANY_PLATFORM);
+    glfwInitHint(GLFW_PLATFORM, mOptions.softwareContext ? GLFW_PLATFORM_NULL : GLFW_ANY_PLATFORM);
 #endif
     bool initialized = glfwInit() == GLFW_TRUE;
 #if defined(__linux__) && (GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4))
     // A stale Wayland socket can coexist with a working X11/XWayland display.
-    if (!initialized && glfwPlatformSupported(GLFW_PLATFORM_X11)) {
+    if (!initialized && !mOptions.softwareContext && glfwPlatformSupported(GLFW_PLATFORM_X11)) {
         glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
         initialized = glfwInit() == GLFW_TRUE;
     }
@@ -85,7 +85,8 @@ bool Application::initOpenGL()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, mOptions.softwareContext ? GLFW_FALSE : GLFW_TRUE);
+    if (mOptions.softwareContext) glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_OSMESA_CONTEXT_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_VISIBLE, mOptions.visible ? GLFW_TRUE : GLFW_FALSE);
 
@@ -106,17 +107,11 @@ bool Application::initOpenGL()
         return false;
     }
     glfwMakeContextCurrent(mWindow);
-    glewExperimental = GL_TRUE;
-    const GLenum glewStatus = glewInit();
-    // GLEW loads core GL first, then probes GLX. Wayland/EGL has no GLX display.
-    const bool coreLoadedWithoutGLX = glewStatus == GLEW_ERROR_NO_GLX_DISPLAY && GLEW_VERSION_3_3;
-    if ((glewStatus != GLEW_OK && !coreLoadedWithoutGLX) || !GLEW_VERSION_3_3)
+    if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress)) || !GLAD_GL_VERSION_3_3)
     {
-        std::cerr << "Failed to initialize OpenGL 3.3: " << glewGetErrorString(glewStatus) << '\n';
+        std::cerr << "Failed to load OpenGL 3.3 functions\n";
         return false;
     }
-    // GLEW may leave GL_INVALID_ENUM when probing a core context.
-    while (glGetError() != GL_NO_ERROR) {}
     glfwSetWindowUserPointer(mWindow, this);
     glfwSetKeyCallback(mWindow, keyCallback);
     glfwSetFramebufferSizeCallback(mWindow, framebufferCallback);

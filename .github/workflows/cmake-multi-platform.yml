@@ -37,10 +37,26 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libgl1-mesa-dev libglfw3-dev libglew-dev libglm-dev ffmpeg xvfb xauth
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libglfw3-dev libglm-dev ffmpeg xvfb xauth
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install ninja glfw glew glm ffmpeg
+        run: brew install ninja glfw glm ffmpeg bison flex
+      - name: Restore macOS software renderer
+        if: runner.os == 'macOS'
+        id: osmesa
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/osmesa
+          key: osmesa-${{ matrix.os }}-24.3.4-softpipe-v1
+      - name: Build macOS software renderer
+        if: runner.os == 'macOS' && steps.osmesa.outputs.cache-hit != 'true'
+        run: bash scripts/build_osmesa.sh "$RUNNER_TEMP/osmesa"
+      - name: Cache macOS software renderer
+        if: runner.os == 'macOS' && steps.osmesa.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/osmesa
+          key: osmesa-${{ matrix.os }}-24.3.4-softpipe-v1
       - name: Install SDL3
         if: runner.os != 'Windows'
         uses: libsdl-org/setup-sdl@main
@@ -88,7 +104,9 @@ jobs:
         run: xvfb-run -a python3 scripts/verify_package.py build/packages
       - name: Verify relocated macOS package
         if: runner.os == 'macOS'
-        run: python3 scripts/verify_package.py build/packages
+        env:
+          DYLD_LIBRARY_PATH: ${{ runner.temp }}/osmesa/lib
+        run: python3 scripts/verify_package.py build/packages --software-context
       - name: Install software OpenGL for Windows package test
         if: runner.os == 'Windows'
         shell: pwsh

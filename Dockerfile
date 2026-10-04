@@ -3,7 +3,7 @@ FROM ubuntu:24.04 AS builder
 ARG SDL_VERSION=3.2.10
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake ninja-build pkg-config curl ca-certificates ffmpeg \
-    libgl1-mesa-dev libglfw3-dev libglew-dev libglm-dev libstb-dev libasound2-dev \
+    libgl1-mesa-dev libglfw3-dev libglm-dev libstb-dev libasound2-dev \
     libpulse-dev libx11-dev libxext-dev libxrandr-dev libxrender-dev \
     libxfixes-dev libxi-dev libxss-dev libxtst-dev xvfb xauth \
     && rm -rf /var/lib/apt/lists/*
@@ -31,7 +31,7 @@ RUN cmake -S . -B build/cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
 
 FROM ubuntu:24.04 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  libgl1 libopengl0 libgl1-mesa-dri libglx-mesa0 libglfw3 libglew2.2 \
+  libgl1 libopengl0 libgl1-mesa-dri libglx-mesa0 libglfw3 \
     libasound2t64 libpulse0 && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/sdl/lib/libSDL3.so* /usr/local/lib/
 RUN ldconfig
