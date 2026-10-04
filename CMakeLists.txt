@@ -155,10 +155,14 @@ if(BUNDLE_RUNTIME_DEPENDENCIES)
         # Ad-hoc signing allows the modified bundle to launch on Apple Silicon.
         install(CODE "execute_process(COMMAND codesign --force --deep --sign - \"\${CMAKE_INSTALL_PREFIX}/project.app\" COMMAND_ERROR_IS_FATAL ANY)")
     elseif(WIN32)
-        install(RUNTIME_DEPENDENCY_SET application_dependencies
-            PRE_EXCLUDE_REGEXES "api-ms-.*" "ext-ms-.*"
-            POST_EXCLUDE_REGEXES ".*[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/[Ss][Yy][Ss][Tt][Ee][Mm]32/.*"
-            RUNTIME DESTINATION .)
+        if(NOT VCPKG_TARGET_TRIPLET MATCHES "windows-static$")
+            install(RUNTIME_DEPENDENCY_SET application_dependencies
+                PRE_EXCLUDE_REGEXES "api-ms-.*" "ext-ms-.*"
+                POST_EXCLUDE_REGEXES ".*[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\\\][Ss][Yy][Ss][Tt][Ee][Mm]32[/\\\\].*"
+                RUNTIME DESTINATION .)
+        endif()
+        # The windows-static triplet and /MT embed the application libraries and CRT.
+        # Only Windows' own DLLs remain; do not recursively try to redistribute them.
     else()
         # Graphics drivers and OS libraries come from the host; bundle our desktop libraries.
         install(RUNTIME_DEPENDENCY_SET application_dependencies
