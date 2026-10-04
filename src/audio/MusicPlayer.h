@@ -21,6 +21,7 @@ public:
     void playImpacts(const std::vector<MeteorImpact>& impacts,const glm::vec3& listener,float time);
     unsigned impactPlayCount() const { return mImpactPlayCount; }
     void release();
+    unsigned device() const { return mDevice; }
     bool ready() const { return mStream!=nullptr; }
     bool impactReady() const { return !mImpactPCM.empty(); }
     bool running() const { return mRunning; }

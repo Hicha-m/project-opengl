@@ -56,8 +56,9 @@ if (mVBO != 0) glDeleteBuffers(1, &mVBO);
 // owned by the scene. Parse into temporary data: failure preserves a loaded mesh.
 bool Mesh::loadOBJ(const std::string& filename)
 {
-    std::ifstream input(ResourcePaths::resolve(filename));
-    if(!input) { std::cerr<<"Cannot open "<<filename<<"\n"; return false; }
+    const auto bytes = ResourcePaths::read(filename);
+    std::istringstream input(std::string(bytes.begin(), bytes.end()));
+    if(bytes.empty()) { std::cerr<<"Cannot open "<<filename<<"\n"; return false; }
     std::vector<glm::vec3> positions,normals;
     std::vector<glm::vec2> uvs;
     std::vector<Vertex> vertices;

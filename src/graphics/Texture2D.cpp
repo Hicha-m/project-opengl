@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 //-----------------------------------------------------------------------------
 // Simple 2D texture class
 //-----------------------------------------------------------------------------
@@ -35,8 +37,8 @@ bool Texture2D::loadTexture(const string& fileName, bool generateMipMaps)
 	int width, height, components;
 
 	// Use stbi image library to load our image
-	const auto filename = ResourcePaths::resolve(fileName).u8string();
-	unsigned char* imageData = stbi_load(filename.c_str(), &width, &height, &components, STBI_rgb_alpha);
+	const auto bytes = ResourcePaths::read(fileName);
+	unsigned char* imageData = bytes.empty() ? nullptr : stbi_load_from_memory(bytes.data(), int(bytes.size()), &width, &height, &components, STBI_rgb_alpha);
 
 	if (imageData == NULL)
 	{
@@ -124,7 +126,20 @@ bool Texture2D::createRed(int width, int height, const float* pixels, bool float
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, floatingPoint ? GL_R32F : GL_R8, width, height, 0, GL_RED, GL_FLOAT, pixels);
+    mRedFloatingPoint = floatingPoint;
+    std::vector<unsigned char> mask;
+    if (!floatingPoint) {
+        mask.resize(std::size_t(width) * height);
+        for (std::size_t i = 0; i < mask.size(); ++i)
+            mask[i] = static_cast<unsigned char>(std::clamp(pixels[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+    }
+#ifdef PROJECT_MOBILE
+    const GLint scalarFormat = GL_R16F; // ES 3.0 guarantees linear sampling of half floats.
+#else
+    const GLint scalarFormat = GL_R32F;
+#endif
+    glTexImage2D(GL_TEXTURE_2D, 0, floatingPoint ? scalarFormat : GL_R8, width, height, 0,
+        GL_RED, floatingPoint ? GL_FLOAT : GL_UNSIGNED_BYTE, floatingPoint ? static_cast<const void*>(pixels) : mask.data());
     glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
     glBindTexture(GL_TEXTURE_2D, binding);
     mRedWidth = width; mRedHeight = height;
@@ -138,7 +153,14 @@ bool Texture2D::updateRed(int width, int height, const float* pixels)
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
     glBindTexture(GL_TEXTURE_2D, mTexture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_FLOAT, pixels);
+    std::vector<unsigned char> mask;
+    if (!mRedFloatingPoint) {
+        mask.resize(std::size_t(width) * height);
+        for (std::size_t i = 0; i < mask.size(); ++i)
+            mask[i] = static_cast<unsigned char>(std::clamp(pixels[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+    }
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED,
+        mRedFloatingPoint ? GL_FLOAT : GL_UNSIGNED_BYTE, mRedFloatingPoint ? static_cast<const void*>(pixels) : mask.data());
     glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
     glBindTexture(GL_TEXTURE_2D, binding);
     return true;

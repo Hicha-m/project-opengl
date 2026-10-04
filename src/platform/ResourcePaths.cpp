@@ -4,9 +4,12 @@
 
 namespace {
 std::filesystem::path locateResources() {
+#ifdef __ANDROID__
+    return std::filesystem::path("."); // SDL IO reads APK assets via Android's AssetManager.
+#endif
     if (const char* base = SDL_GetBasePath()) {
         const auto directory = std::filesystem::u8path(base);
-        for (const auto& candidate : {directory, directory / "runtime"}) {
+        for (const auto& candidate : {directory, directory / "runtime", directory / "Resources"}) {
             if (std::filesystem::is_directory(candidate / "shaders")) return candidate;
         }
     }
@@ -30,9 +33,19 @@ const std::filesystem::path& ResourcePaths::root() {
 
 std::filesystem::path ResourcePaths::resolve(const std::string& relative) {
     const auto path = std::filesystem::u8path(relative);
-    return path.is_absolute() ? path : root() / path;
+    return (path.is_absolute() ? path : root() / path).lexically_normal();
 }
 
 void ResourcePaths::setRoot(const std::filesystem::path& directory) {
     resourceRoot() = std::filesystem::absolute(directory);
+}
+
+std::vector<unsigned char> ResourcePaths::read(const std::string& relative) {
+    const auto filename = resolve(relative).u8string();
+    std::size_t length = 0;
+    auto* data = static_cast<unsigned char*>(SDL_LoadFile(filename.c_str(), &length));
+    if (!data) return {};
+    std::vector<unsigned char> bytes(data, data + length);
+    SDL_free(data);
+    return bytes;
 }

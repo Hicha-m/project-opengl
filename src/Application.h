@@ -18,7 +18,7 @@
 #include "audio/MusicPlayer.h"
 #include "graphics/HDRPipeline.h"
 
-struct GLFWwindow;
+namespace WindowSystem { struct Window; }
 
 struct ApplicationOptions
 {
@@ -39,7 +39,7 @@ public:
     Application& operator=(const Application&) = delete;
 
     bool init();
-    void run(std::size_t frameLimit = 0); // zero: run until window closes
+    void run(std::size_t frameLimit = 0, bool present = true); // zero: run until window closes
     void shutdown();
     void restartSequence();
     void seekSequence(float seconds);
@@ -48,6 +48,7 @@ public:
     float sequenceTime() const { return mTimeline.getTime(); }
     float playbackRate() const { return mPlaybackRate; }
     bool sequencePaused() const { return mSequencePaused; }
+    bool audioMuted() const { return mMusicMuted; }
     bool audioReady() const { return mMusic.ready() && mMusic.impactReady(); }
     MeteorSystem& meteors() { return mMeteorSystem; }
     ParticleSystem& particles() { return mParticleSystem; }
@@ -65,12 +66,11 @@ private:
     void showFPS(double currentTime);
     void onKey(int key, int action);
     void onFramebufferSize(int width, int height);
-    static void keyCallback(GLFWwindow*, int, int, int, int);
-    static void framebufferCallback(GLFWwindow*, int, int);
+    static void keyCallback(WindowSystem::Window*, int, int, int, int);
+    static void framebufferCallback(WindowSystem::Window*, int, int);
 
     ApplicationOptions mOptions;
-    GLFWwindow* mWindow = nullptr;
-    bool mGLFWInitialized = false;
+    WindowSystem::Window* mWindow = nullptr;
     bool mInitialized = false;
     bool mWireframe = false;
     bool mCameraDebug = false;
@@ -80,6 +80,7 @@ private:
     float mPlaybackRate=1;
     bool mSequencePaused=false;
     bool mClockResync=false;
+    bool mWasSuspended=false;
     float mMoveSpeed = 5.0f;
     double mFPSStart = 0;
     unsigned mFrameCount = 0;

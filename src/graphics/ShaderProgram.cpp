@@ -81,34 +81,18 @@ bool ShaderProgram::loadShaders(const char* vsFilename, const char* fsFilename)
 //-----------------------------------------------------------------------------
 string ShaderProgram::fileToString(const string& filename)
 {
-	std::stringstream ss;
-	std::ifstream file;
-
-	// Enable ifstream object exceptions
-    file.exceptions (std::ifstream::failbit | std::ifstream::badbit);
-	try
-	{
-		file.open(ResourcePaths::resolve(filename), std::ios::in);
-
-		if (!file.fail())
-		{
-			// Using a std::stringstream is easier than looping through each line of the file
-			ss << file.rdbuf();
-		}
-
-		file.close();
-	}
-	catch (const std::exception& ex)
-	{
-		std::cerr << "Error reading shader file " << filename << std::endl;
-	}
-
-	return ss.str();
+    const auto bytes = ResourcePaths::read(filename);
+    if (bytes.empty()) { std::cerr << "Error reading shader file " << filename << '\n'; return {}; }
+    std::string text(bytes.begin(), bytes.end());
+#ifdef PROJECT_MOBILE
+    const std::string desktopVersion = "#version 330 core";
+    if (text.compare(0, desktopVersion.size(), desktopVersion) == 0)
+        text.replace(0, desktopVersion.size(), "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;");
+#endif
+    return text;
 }
 
-//-----------------------------------------------------------------------------
-// Activate the shader program
-//-----------------------------------------------------------------------------
+// Activate the shader program.
 void ShaderProgram::use()
 {
 	if (mHandle > 0)

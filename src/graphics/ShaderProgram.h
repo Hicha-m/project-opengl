@@ -6,7 +6,7 @@
 
 #include <string>
 #include <map>
-#include <glad/gl.h>
+#include "platform/OpenGL.h"
 #include "glm/glm.hpp"
 using std::string;
 

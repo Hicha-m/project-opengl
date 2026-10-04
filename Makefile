@@ -10,6 +10,7 @@ MUSIC_WAV := $(BUILD_DIR)/music/cinematic.wav
 IMPACT_WAV := $(BUILD_DIR)/music/impact.wav
 
 COMMON_SRC := \
+    src/platform/Window.cpp \
 	src/platform/ResourcePaths.cpp \
 	src/Application.cpp \
 	src/audio/MusicPlayer.cpp \

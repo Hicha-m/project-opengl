@@ -8,19 +8,56 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 include(CTest)
+option(PROJECT_MOBILE "Use SDL windows, touch controls and OpenGL ES 3.0" OFF)
+if(ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(PROJECT_MOBILE ON CACHE BOOL "Mobile backend" FORCE)
+endif()
+if(PROJECT_MOBILE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
 option(ENABLE_RUNTIME_TESTS "Register the OpenGL tests (requires a display)" OFF)
 option(BUNDLE_RUNTIME_DEPENDENCIES "Include desktop libraries in distributable packages" ON)
 
-find_package(OpenGL REQUIRED)
-find_package(glfw3 3.3 REQUIRED)
-find_package(glm CONFIG REQUIRED)
-find_package(SDL3 3.2 CONFIG REQUIRED)
+if(NOT PROJECT_MOBILE)
+    find_package(OpenGL REQUIRED)
+    find_package(glfw3 3.3 REQUIRED)
+    set(GRAPHICS_LIBRARIES OpenGL::GL glfw)
+endif()
+if(ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    include(FetchContent)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    if(ANDROID)
+        set(SDL_SHARED ON CACHE BOOL "" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    else()
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    endif()
+    FetchContent_Declare(SDL3
+        URL https://github.com/libsdl-org/SDL/releases/download/release-3.2.10/SDL3-3.2.10.tar.gz
+        URL_HASH SHA256=f87be7b4dec66db4098e9c167b2aa34e2ca10aeb5443bdde95ae03185ed513e0)
+    set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLM_BUILD_LIBRARY OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(glm
+        URL https://github.com/g-truc/glm/archive/refs/tags/1.0.1.tar.gz
+        URL_HASH SHA256=9f3174561fd26904b23f0db5e560971cbf9b3cbda0b280f04d5c379d03bf234c)
+    FetchContent_MakeAvailable(SDL3 glm)
+else()
+    find_package(glm CONFIG REQUIRED)
+    find_package(SDL3 3.2 CONFIG REQUIRED)
+endif()
 find_program(FFMPEG_EXECUTABLE ffmpeg REQUIRED)
 
-add_library(glad STATIC third_party/glad/src/gl.c)
+if(PROJECT_MOBILE)
+    add_library(glad STATIC third_party/glad/src/gles2.c)
+else()
+    add_library(glad STATIC third_party/glad/src/gl.c)
+endif()
 target_include_directories(glad PUBLIC third_party/glad/include)
 
 add_library(project_core STATIC
+    src/platform/Window.cpp
     src/platform/ResourcePaths.cpp
     src/Application.cpp
     src/audio/MusicPlayer.cpp
@@ -52,8 +89,11 @@ add_library(project_core STATIC
 )
 target_include_directories(project_core PUBLIC src)
 target_include_directories(project_core SYSTEM PRIVATE third_party/stb)
-target_link_libraries(project_core PUBLIC OpenGL::GL glfw glad glm::glm SDL3::SDL3)
+target_link_libraries(project_core PUBLIC ${GRAPHICS_LIBRARIES} glad glm::glm SDL3::SDL3)
 target_compile_definitions(project_core PUBLIC GLFW_INCLUDE_NONE)
+if(PROJECT_MOBILE)
+    target_compile_definitions(project_core PUBLIC PROJECT_MOBILE)
+endif()
 if(MSVC)
     target_compile_options(project_core PRIVATE /W4 /utf-8)
 else()
@@ -85,7 +125,11 @@ add_custom_target(runtime_audio ALL DEPENDS
     "${RUNTIME_DIR}/build/music/cinematic.wav"
     "${RUNTIME_DIR}/build/music/impact.wav")
 
-add_executable(project src/main.cpp)
+if(ANDROID)
+    add_library(project SHARED src/main.cpp)
+else()
+    add_executable(project src/main.cpp)
+endif()
 target_link_libraries(project PRIVATE project_core)
 # Keep all configurations beside the same assets, including Visual Studio builds.
 set_target_properties(project PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_DIR}/$<0:>")
@@ -95,6 +139,9 @@ if(APPLE)
         MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.hicha-m.project-opengl"
         MACOSX_BUNDLE_BUNDLE_NAME "OpenGL Space Cinematic"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        set_target_properties(project PROPERTIES XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/mobile/ios/Info.plist")
+    endif()
     add_custom_command(TARGET project POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/shaders" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/shaders"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/textures" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/textures"
@@ -105,6 +152,10 @@ elseif(UNIX)
     set_target_properties(project PROPERTIES INSTALL_RPATH "$ORIGIN/lib")
 endif()
 add_dependencies(project runtime_assets runtime_audio)
+if(ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # Mobile launchers package the app library/bundle and assets rather than desktop archives.
+    return()
+endif()
 add_custom_target(run
     COMMAND "$<TARGET_FILE:project>"
     WORKING_DIRECTORY "${RUNTIME_DIR}"
@@ -113,6 +164,9 @@ add_custom_target(run
 if(BUILD_TESTING)
     set(TEST_NAMES resource_paths music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application)
     foreach(name IN LISTS TEST_NAMES)
+        if(PROJECT_MOBILE AND name STREQUAL "application")
+            continue() # Desktop-specific GLFW context checks have a separate suite.
+        endif()
         add_executable(test_${name} tests/${name}.cpp)
         target_link_libraries(test_${name} PRIVATE project_core)
         # The existing tests use assert(), including for operations with side effects.

@@ -8,6 +8,6 @@ void main() {
     vec3 sum = texture(source,uv).rgb*0.227027;
     float weights[4] = float[](0.194595,0.121622,0.054054,0.016216);
     for(int i=1;i<=4;++i)
-        sum += (texture(source,uv+stepUV*i).rgb+texture(source,uv-stepUV*i).rgb)*weights[i-1];
+        sum += (texture(source,uv+stepUV*float(i)).rgb+texture(source,uv-stepUV*float(i)).rgb)*weights[i-1];
     color = vec4(sum,1);
 }

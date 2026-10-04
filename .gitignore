@@ -7,3 +7,10 @@ project
 # Generated objects, dependency files and test binaries
 /build/
 __pycache__/
+
+# Android generated files
+/mobile/android/.gradle/
+/mobile/android/app/.cxx/
+/mobile/android/app/build/
+/mobile/android/build/
+/mobile/android/local.properties

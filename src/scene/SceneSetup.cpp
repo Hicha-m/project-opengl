@@ -26,8 +26,9 @@ namespace
             || !r.shuttleSource.loadOBJ("models/shuttle/shuttle.obj")) return false;
         struct Surface { glm::vec3 color{0.8f}; float metal=0, rough=0.7f; std::string diffuse,normal; };
         std::unordered_map<std::string,Surface> surfaces;
-        std::ifstream file(ResourcePaths::resolve("models/shuttle/shuttle.mtl"));
-        if(!file) return false;
+        const auto bytes = ResourcePaths::read("models/shuttle/shuttle.mtl");
+        if(bytes.empty()) return false;
+        std::istringstream file(std::string(bytes.begin(), bytes.end()));
         std::string line,name;
         while(std::getline(file,line)) {
             std::istringstream row(line); std::string key; row>>key;

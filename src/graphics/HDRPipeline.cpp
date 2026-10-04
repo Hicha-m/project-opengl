@@ -1,5 +1,7 @@
 #include "graphics/HDRPipeline.h"
 #include <algorithm>
+#include <cstring>
+#include <cmath>
 namespace {
     bool load(ShaderProgram& shader, const char* fragment) {
         if (!shader.loadShaders("shaders/post.vert",fragment)) return false;
@@ -8,7 +10,16 @@ namespace {
     }
     void texture(GLuint& id, int width, int height) {
         glGenTextures(1,&id); glBindTexture(GL_TEXTURE_2D,id);
-        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA16F,width,height,0,GL_RGBA,GL_FLOAT,nullptr);
+        bool floatingPoint = true;
+#ifdef PROJECT_MOBILE
+        floatingPoint = false;
+        GLint count = 0; glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+        for (int i = 0; i < count; ++i) {
+            const char* extension = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
+            if (!std::strcmp(extension, "GL_EXT_color_buffer_float") || !std::strcmp(extension, "GL_EXT_color_buffer_half_float")) floatingPoint = true;
+        }
+#endif
+        glTexImage2D(GL_TEXTURE_2D,0,floatingPoint ? GL_RGBA16F : GL_RGBA8,width,height,0,GL_RGBA,floatingPoint ? GL_FLOAT : GL_UNSIGNED_BYTE,nullptr);
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
@@ -30,6 +41,11 @@ void HDRPipeline::release()
 bool HDRPipeline::targets(int width, int height)
 {
     if (width <= 0 || height <= 0) return false;
+#ifdef PROJECT_MOBILE
+    const float scale = std::min(1.0f, 1280.0f / std::max(width, height));
+    width = std::max(1, int(std::round(width * scale)));
+    height = std::max(1, int(std::round(height * scale)));
+#endif
     if (width == mWidth && height == mHeight) return true;
     mWidth = mHeight = 0;
     if (mSceneFBO) glDeleteFramebuffers(1,&mSceneFBO);
@@ -76,7 +92,7 @@ bool HDRPipeline::begin(int width, int height)
 {
     if (!mVAO || !targets(width,height)) return false;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING,&mDestination); glGetIntegerv(GL_VIEWPORT,mViewport);
-    glBindFramebuffer(GL_FRAMEBUFFER,mSceneFBO); glViewport(0,0,width,height);
+    glBindFramebuffer(GL_FRAMEBUFFER,mSceneFBO); glViewport(0,0,mWidth,mHeight);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     const GLfloat zero[]={0,0,0,0};
     glClearBufferfv(GL_COLOR,1,zero);
@@ -84,13 +100,22 @@ bool HDRPipeline::begin(int width, int height)
 }
 void HDRPipeline::finish(bool bloom)
 {
-    GLint program, vao, active, binding[2], polygon[2];
+    GLint program, vao, active, binding[2];
+#ifndef PROJECT_MOBILE
+    GLint polygon[2];
+#endif
     glGetIntegerv(GL_CURRENT_PROGRAM,&program); glGetIntegerv(GL_VERTEX_ARRAY_BINDING,&vao);
-    glGetIntegerv(GL_ACTIVE_TEXTURE,&active); glGetIntegerv(GL_POLYGON_MODE,polygon);
+    glGetIntegerv(GL_ACTIVE_TEXTURE,&active);
+#ifndef PROJECT_MOBILE
+    glGetIntegerv(GL_POLYGON_MODE,polygon);
+#endif
     for(int i=0;i<2;++i) { glActiveTexture(GL_TEXTURE0+i); glGetIntegerv(GL_TEXTURE_BINDING_2D,&binding[i]); }
     const bool depth=glIsEnabled(GL_DEPTH_TEST), blend=glIsEnabled(GL_BLEND), cull=glIsEnabled(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
-    glPolygonMode(GL_FRONT_AND_BACK,GL_FILL); glBindVertexArray(mVAO);
+#ifndef PROJECT_MOBILE
+    glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+#endif
+    glBindVertexArray(mVAO);
     glViewport(0,0,std::max(1,mWidth/2),std::max(1,mHeight/2));
     glBindFramebuffer(GL_FRAMEBUFFER,mFBO[0]); mBright.use();
     glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D,mEmission); mBright.setUniform("emissionSource",1);
@@ -110,7 +135,9 @@ void HDRPipeline::finish(bool bloom)
     glDrawArrays(GL_TRIANGLES,0,3);
     for(int i=0;i<2;++i) { glActiveTexture(GL_TEXTURE0+i); glBindTexture(GL_TEXTURE_2D,binding[i]); }
     glActiveTexture(active); glUseProgram(program); glBindVertexArray(vao);
+#ifndef PROJECT_MOBILE
     glPolygonMode(GL_FRONT_AND_BACK,polygon[0]);
+#endif
     if(depth) glEnable(GL_DEPTH_TEST);
     if(blend) glEnable(GL_BLEND);
     if(cull) glEnable(GL_CULL_FACE);

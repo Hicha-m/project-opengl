@@ -4,7 +4,7 @@
 #ifndef TEXTURE2D_H
 #define TEXTURE2D_H
 
-#include <glad/gl.h>
+#include "platform/OpenGL.h"
 #include <string>
 using std::string;
 
@@ -30,6 +30,7 @@ private:
 	Texture2D& operator=(Texture2D&&) noexcept;
 
 	GLuint mTexture;
+	bool mRedFloatingPoint = false;
 	int mRedWidth = 0, mRedHeight = 0;
 };
 #endif //TEXTURE2D_H

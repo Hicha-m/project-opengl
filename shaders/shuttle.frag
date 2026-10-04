@@ -21,8 +21,8 @@ void main() {
         base*=surface.rgb;
     }
     vec3 light=normalize(sunPosition-FragPos), view=normalize(viewPos-FragPos);
-    float diffuse=max(dot(n,light),0), fill=max(dot(n,view),0);
-    float specular=pow(max(dot(n,normalize(light+view)),0),mix(64.0,8.0,roughness));
+    float diffuse=max(dot(n,light),0.0), fill=max(dot(n,view),0.0);
+    float specular=pow(max(dot(n,normalize(light+view)),0.0),mix(64.0,8.0,roughness));
     // Gentle camera fill keeps the nose readable when the Sun is behind the craft.
     color=vec4(base*(0.4+0.65*diffuse+0.65*fill)+specular*mix(0.08,0.3,metallic),1);
     bloomSource=vec4(0,0,0,1);

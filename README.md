@@ -227,12 +227,12 @@ pull requests and manual triggers:
 
 ## Mobile scope
 
-The current application is a desktop OpenGL/GLFW application. It does not produce
-an Android APK or an iOS app. SDL3 audio can be reused for those platforms, but
-mobile support requires replacing GLFW's window/input loop, adapting the shaders
-and renderer to OpenGL ES or a supported mobile graphics backend, packaging
-resources for mobile storage, and implementing touch controls. Desktop packages
-must not be presented as mobile builds. See [the mobile assessment](docs/MOBILE.md).
+An Android/iOS MVP is available with SDL3 windows, OpenGL ES 3.0, packaged audio
+and five touch controls. See [mobile build and test instructions](docs/MOBILE.md).
+The Mobile MVP workflow produces a development Android APK, an iOS simulator
+application and an unsigned iPhone build. iPhone installation requires Apple
+development signing. Store publication and a touch free-flight camera are beyond
+the MVP.
 
 ## Controls
 

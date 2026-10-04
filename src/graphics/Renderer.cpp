@@ -1,6 +1,6 @@
 #include "graphics/Renderer.h"
 
-#include <glad/gl.h>
+#include "platform/OpenGL.h"
 
 
 void Renderer::render(

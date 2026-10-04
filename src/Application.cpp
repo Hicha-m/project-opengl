@@ -1,5 +1,5 @@
 #include "Application.h"
-#include <GLFW/glfw3.h>
+#include "platform/Window.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <sstream>
@@ -53,7 +53,8 @@ bool Application::init()
         if(!mMusic.loadImpact("build/music/impact.wav")) std::cerr<<"Impact sound unavailable\n";
     }
     else if (mOptions.music) std::cerr << "Music unavailable; continuing without audio\n";
-    mFPSStart = glfwGetTime();
+    WindowSystem::setAudioDevice(mWindow, mMusic.device());
+    mFPSStart = WindowSystem::time();
     mInitialized = true;
     return true;
 }
@@ -61,84 +62,45 @@ bool Application::init()
 bool Application::initOpenGL()
 {
     if (mOptions.width <= 0 || mOptions.height <= 0) return false;
-    // Let GLFW select Win32, Cocoa, X11 or Wayland according to the host.
-    glfwSetErrorCallback([](int code, const char* description) {
-        std::cerr << "GLFW error " << code << ": " << description << '\n';
-    });
-#if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
-    glfwInitHint(GLFW_PLATFORM, mOptions.softwareContext ? GLFW_PLATFORM_NULL : GLFW_ANY_PLATFORM);
-#endif
-    bool initialized = glfwInit() == GLFW_TRUE;
-#if defined(__linux__) && (GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4))
-    // A stale Wayland socket can coexist with a working X11/XWayland display.
-    if (!initialized && !mOptions.softwareContext && glfwPlatformSupported(GLFW_PLATFORM_X11)) {
-        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-        initialized = glfwInit() == GLFW_TRUE;
-    }
-#endif
-    if (!initialized)
-    {
-        std::cerr << "GLFW initialization failed\n";
-        return false;
-    }
-    mGLFWInitialized = true;
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, mOptions.softwareContext ? GLFW_FALSE : GLFW_TRUE);
-    if (mOptions.softwareContext) glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_OSMESA_CONTEXT_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_VISIBLE, mOptions.visible ? GLFW_TRUE : GLFW_FALSE);
-
-    GLFWmonitor* monitor = mOptions.fullscreen ? glfwGetPrimaryMonitor() : nullptr;
+    mWindow = WindowSystem::create(mOptions.width, mOptions.height, APP_TITLE,
+        mOptions.visible, mOptions.fullscreen, mOptions.softwareContext);
+    if (!mWindow || !WindowSystem::loadGraphics()) return false;
     int width = mOptions.width, height = mOptions.height;
-    if (monitor)
-    {
-        if (const auto* mode = glfwGetVideoMode(monitor))
-        {
-            width = mode->width;
-            height = mode->height;
-        }
-    }
-    mWindow = glfwCreateWindow(width, height, APP_TITLE, monitor, nullptr);
-    if (!mWindow)
-    {
-        std::cerr << "Failed to create GLFW window\n";
-        return false;
-    }
-    glfwMakeContextCurrent(mWindow);
-    if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress)) || !GLAD_GL_VERSION_3_3)
-    {
-        std::cerr << "Failed to load OpenGL 3.3 functions\n";
-        return false;
-    }
-    glfwSetWindowUserPointer(mWindow, this);
-    glfwSetKeyCallback(mWindow, keyCallback);
-    glfwSetFramebufferSizeCallback(mWindow, framebufferCallback);
-    glfwSetInputMode(mWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
-    glfwGetFramebufferSize(mWindow, &width, &height);
+    WindowSystem::size(mWindow, &width, &height);
+    WindowSystem::setUserPointer(mWindow, this);
+    WindowSystem::setKeyCallback(mWindow, keyCallback);
+    WindowSystem::setFramebufferCallback(mWindow, framebufferCallback);
+    WindowSystem::setCursor(mWindow, width / 2.0, height / 2.0);
+    WindowSystem::framebufferSize(mWindow, &width, &height);
     onFramebufferSize(width, height);
     glClearColor(0.06f, 0.06f, 0.07f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     return true;
 }
 
-void Application::run(std::size_t frameLimit)
+void Application::run(std::size_t frameLimit, bool present)
 {
     if (!mInitialized) return;
     if(mMusic.ready() && !mMusic.running()) mMusic.restart();
-    double lastTime = glfwGetTime();
+    double lastTime = WindowSystem::time();
     std::size_t frames = 0;
-    while (!glfwWindowShouldClose(mWindow))
+    while (!WindowSystem::shouldClose(mWindow))
     {
-        glfwPollEvents();
-        double currentTime = glfwGetTime();
+        WindowSystem::pollEvents();
+        if (WindowSystem::shouldClose(mWindow)) break;
+        if (WindowSystem::suspended(mWindow)) {
+            mMusic.setPaused(true); mWasSuspended = true;
+            lastTime = WindowSystem::time(); WindowSystem::wait(); continue;
+        }
+        if (mWasSuspended || WindowSystem::consumeResume(mWindow)) {
+            mMusic.setPaused(mSequencePaused); mClockResync = true; mWasSuspended = false;
+        }
+        double currentTime = WindowSystem::time();
         if(mClockResync) { lastTime=currentTime; mClockResync=false; }
         update(static_cast<float>(currentTime - lastTime));
         render();
         showFPS(currentTime);
-        glfwSwapBuffers(mWindow);
+        if (present) WindowSystem::swap(mWindow);
         lastTime = currentTime;
         if (frameLimit && ++frames >= frameLimit) break;
     }
@@ -204,20 +166,20 @@ void Application::simulate(float deltaTime,bool audible)
 void Application::updateInput(float deltaTime)
 {
     int width, height;
-    glfwGetWindowSize(mWindow, &width, &height);
+    WindowSystem::size(mWindow, &width, &height);
     double mouseX, mouseY;
-    glfwGetCursorPos(mWindow, &mouseX, &mouseY);
-    glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
+    WindowSystem::cursor(mWindow, &mouseX, &mouseY);
+    WindowSystem::setCursor(mWindow, width / 2.0, height / 2.0);
     if (!mFPSMode) return;
     mFPSCamera.rotate(static_cast<float>(width / 2.0 - mouseX) * MOUSE_SENSITIVITY,
                       static_cast<float>(height / 2.0 - mouseY) * MOUSE_SENSITIVITY);
     const float step = mMoveSpeed * deltaTime;
-    if (glfwGetKey(mWindow, GLFW_KEY_W) == GLFW_PRESS) mFPSCamera.move(step * mFPSCamera.getLook());
-    else if (glfwGetKey(mWindow, GLFW_KEY_S) == GLFW_PRESS) mFPSCamera.move(-step * mFPSCamera.getLook());
-    if (glfwGetKey(mWindow, GLFW_KEY_A) == GLFW_PRESS) mFPSCamera.move(-step * mFPSCamera.getRight());
-    else if (glfwGetKey(mWindow, GLFW_KEY_D) == GLFW_PRESS) mFPSCamera.move(step * mFPSCamera.getRight());
-    if (glfwGetKey(mWindow, GLFW_KEY_Z) == GLFW_PRESS) mFPSCamera.move(step * glm::vec3(0, 1, 0));
-    else if (glfwGetKey(mWindow, GLFW_KEY_X) == GLFW_PRESS) mFPSCamera.move(-step * glm::vec3(0, 1, 0));
+    if (WindowSystem::key(mWindow, WindowSystem::Key::W) == WindowSystem::Press) mFPSCamera.move(step * mFPSCamera.getLook());
+    else if (WindowSystem::key(mWindow, WindowSystem::Key::S) == WindowSystem::Press) mFPSCamera.move(-step * mFPSCamera.getLook());
+    if (WindowSystem::key(mWindow, WindowSystem::Key::A) == WindowSystem::Press) mFPSCamera.move(-step * mFPSCamera.getRight());
+    else if (WindowSystem::key(mWindow, WindowSystem::Key::D) == WindowSystem::Press) mFPSCamera.move(step * mFPSCamera.getRight());
+    if (WindowSystem::key(mWindow, WindowSystem::Key::Z) == WindowSystem::Press) mFPSCamera.move(step * glm::vec3(0, 1, 0));
+    else if (WindowSystem::key(mWindow, WindowSystem::Key::X) == WindowSystem::Press) mFPSCamera.move(-step * glm::vec3(0, 1, 0));
 }
 
 void Application::render()
@@ -240,6 +202,7 @@ void Application::render()
     mEarthBreakupSystem.render(mRenderer,mScene.findObject("Earth")->material,mLightManager,view,projection,position);
     mParticleSystem.render(view, projection);
     mHDR->finish();
+    if (mOptions.visible) WindowSystem::drawControls(mWindow, mSequencePaused, mMusicMuted);
 }
 
 void Application::showFPS(double currentTime)
@@ -260,34 +223,36 @@ void Application::showFPS(double currentTime)
         title << "    Cam Pos: (" << position.x << ", " << position.y << ", " << position.z
               << ")    Yaw: " << mFPSCamera.getYaw() << " deg    Pitch: " << mFPSCamera.getPitch() << " deg";
     }
-    glfwSetWindowTitle(mWindow, title.str().c_str());
+    WindowSystem::setTitle(mWindow, title.str().c_str());
     mFPSStart = currentTime;
     mFrameCount = 0;
 }
 
-void Application::keyCallback(GLFWwindow* window, int key, int, int action, int)
+void Application::keyCallback(WindowSystem::Window* window, int key, int, int action, int)
 {
-    if (auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window))) app->onKey(key, action);
+    if (auto* app = static_cast<Application*>(WindowSystem::userPointer(window))) app->onKey(key, action);
 }
 
-void Application::framebufferCallback(GLFWwindow* window, int width, int height)
+void Application::framebufferCallback(WindowSystem::Window* window, int width, int height)
 {
-    if (auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window))) app->onFramebufferSize(width, height);
+    if (auto* app = static_cast<Application*>(WindowSystem::userPointer(window))) app->onFramebufferSize(width, height);
 }
 
 void Application::onKey(int key, int action)
 {
-    if (action != GLFW_PRESS) return;
-    if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
-    if (key == GLFW_KEY_F1)
+    if (action != WindowSystem::Press) return;
+    if (key == WindowSystem::Key::Escape) WindowSystem::close(mWindow);
+    if (key == WindowSystem::Key::F1)
     {
         mWireframe = !mWireframe;
+#ifndef PROJECT_MOBILE
         glPolygonMode(GL_FRONT_AND_BACK, mWireframe ? GL_LINE : GL_FILL);
+#endif
     }
-    if (key == GLFW_KEY_G) mMoveSpeed *= 2;
-    if (key == GLFW_KEY_H) mMoveSpeed /= 2;
-    if (key == GLFW_KEY_F2) mCameraDebug = !mCameraDebug;
-    if (key == GLFW_KEY_F3)
+    if (key == WindowSystem::Key::G) mMoveSpeed *= 2;
+    if (key == WindowSystem::Key::H) mMoveSpeed /= 2;
+    if (key == WindowSystem::Key::F2) mCameraDebug = !mCameraDebug;
+    if (key == WindowSystem::Key::F3)
     {
         mFPSMode = !mFPSMode;
         if (mFPSMode)
@@ -299,19 +264,19 @@ void Application::onKey(int key, int action)
             mFPSCamera.setFOV(mCinematicCamera.getFOV());
         }
         int width, height;
-        glfwGetWindowSize(mWindow, &width, &height);
-        glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
+        WindowSystem::size(mWindow, &width, &height);
+        WindowSystem::setCursor(mWindow, width / 2.0, height / 2.0);
     }
-    if (key == GLFW_KEY_M) {
+    if (key == WindowSystem::Key::M) {
         mMusicMuted=!mMusicMuted; mMusic.setMuted(mMusicMuted);
     }
-    if (key == GLFW_KEY_UP || key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD) setPlaybackRate(mPlaybackRate*2);
-    if (key == GLFW_KEY_DOWN || key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT) setPlaybackRate(mPlaybackRate/2);
-    if (key == GLFW_KEY_0 || key == GLFW_KEY_KP_0) setPlaybackRate(1);
-    if (key == GLFW_KEY_LEFT) seekSequence(mTimeline.getTime()-10);
-    if (key == GLFW_KEY_RIGHT) seekSequence(mTimeline.getTime()+10);
-    if (key == GLFW_KEY_SPACE) toggleSequencePause();
-    if (key == GLFW_KEY_R) restartSequence();
+    if (key == WindowSystem::Key::Up || key == WindowSystem::Key::Equal || key == WindowSystem::Key::KeypadAdd) setPlaybackRate(mPlaybackRate*2);
+    if (key == WindowSystem::Key::Down || key == WindowSystem::Key::Minus || key == WindowSystem::Key::KeypadSubtract) setPlaybackRate(mPlaybackRate/2);
+    if (key == WindowSystem::Key::Zero || key == WindowSystem::Key::KeypadZero) setPlaybackRate(1);
+    if (key == WindowSystem::Key::Left) seekSequence(mTimeline.getTime()-10);
+    if (key == WindowSystem::Key::Right) seekSequence(mTimeline.getTime()+10);
+    if (key == WindowSystem::Key::Space) toggleSequencePause();
+    if (key == WindowSystem::Key::R) restartSequence();
 }
 
 void Application::restartSequence()
@@ -389,8 +354,9 @@ void Application::onFramebufferSize(int width, int height)
 
 void Application::shutdown()
 {
+    WindowSystem::setAudioDevice(mWindow, 0);
     mMusic.release();
-    if (mWindow) glfwMakeContextCurrent(mWindow);
+    if (mWindow) WindowSystem::bind(mWindow);
     mSequencePaused=false;
     mTimeline = Timeline{}; // Release borrowed scene/camera bindings first.
     mMeteorShower.reset();
@@ -409,10 +375,8 @@ void Application::shutdown()
     mEarthBreakupSystem.reset();
     mResources.reset(); // GPU destructors require the current context.
     mLightManager = LightManager{};
-    if (mWindow) glfwDestroyWindow(mWindow);
+    if (mWindow) WindowSystem::destroy(mWindow);
     mWindow = nullptr;
-    if (mGLFWInitialized) glfwTerminate();
-    mGLFWInitialized = false;
     mInitialized = false;
     mWireframe = false;
     mFPSMode = false;
