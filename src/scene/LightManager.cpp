@@ -1,4 +1,24 @@
 #include "scene/LightManager.h"
+#include <algorithm>
+#include <cmath>
+
+void LightManager::setTransientPointLights(const std::vector<PointLight>& lights)
+{
+    mTransientPointLights = lights;
+}
+
+std::vector<PointLight> LightManager::shaderPointLights() const
+{
+    auto selected = mPointLights;
+    selected.insert(selected.end(), mTransientPointLights.begin(), mTransientPointLights.end());
+    selected.erase(std::remove_if(selected.begin(), selected.end(),
+        [](const PointLight& light) { return !std::isfinite(light.intensity) || light.intensity <= 0; }),
+        selected.end());
+    std::stable_sort(selected.begin(), selected.end(),
+        [](const PointLight& a, const PointLight& b) { return a.intensity > b.intensity; });
+    if (selected.size() > MaxPointLights) selected.resize(MaxPointLights);
+    return selected;
+}
 
 void LightManager::setDirectionalLight(const DirectionalLight &light)
 {
@@ -48,16 +68,17 @@ void LightManager::applyToShader(
     // Point lights
     // --------------------------------------------------
 
+    const auto points = shaderPointLights();
     shader.setUniform(
         "pointLightCount",
-        static_cast<int>(mPointLights.size()));
+        static_cast<int>(points.size()));
 
     for (size_t i = 0;
-         i < mPointLights.size();
+         i < points.size();
          ++i)
     {
         const PointLight &light =
-            mPointLights[i];
+            points[i];
 
         std::string index =
             std::to_string(i);

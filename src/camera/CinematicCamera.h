@@ -10,6 +10,9 @@ public:
     CinematicCamera();
 
     void update(float time);
+    void setPose(const glm::vec3& eye, const glm::vec3& target) { mPosition=eye; mTargetPos=target; updateVectors(); }
+    const glm::vec3& target() const { return mTargetPos; }
+    void setOrbitOffset(const glm::vec3& offset) { mOrbitOffset=offset; }
 
 
     // ------------------------------------------------
@@ -55,6 +58,7 @@ private:
     // ------------------------------------------------
 
     bool mOrbitEnabled = false;
+    glm::vec3 mOrbitOffset{0};
 
     AnimationTrack<float>
         mOrbitRadiusTrack;

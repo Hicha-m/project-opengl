@@ -172,6 +172,7 @@ void CinematicCamera::updateOrbit(float time)
     }
 
 
+    target += mOrbitOffset;
     mTargetPos = target;
 
 

@@ -4,13 +4,15 @@ in vec3 FragPos;
 in vec3 Normal;
 in vec2 TexCoord;
 
-out vec4 frag_color;
+layout(location=0) out vec4 frag_color;
+layout(location=1) out vec4 bloomSource;
 
 uniform sampler2D cloudMap;
 uniform vec3 sunDirection;
 
 void main()
 {
+    bloomSource = vec4(0,0,0,1);
     vec3 normal =
         normalize(Normal);
 

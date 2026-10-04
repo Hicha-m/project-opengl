@@ -1,151 +1,145 @@
-# Projet OpenGL — espace et cinématique
+# OpenGL Space Cinematic
 
-## Organisation
+Real-time OpenGL project featuring a cinematic journey from an Earth under
+meteor bombardment to a wide shot of the Solar System and the Milky Way.
+
+![Space cinematic preview](image.gif)
+
+## Overview
+
+This project combines a scripted camera sequence with real-time rendering and
+simulation. It demonstrates a complete OpenGL scene rather than a collection
+of isolated effects:
+
+- Earth lighting with day/night, normal, specular, damage and heat maps.
+- Deterministic meteor showers, collisions, trails and impact effects.
+- Progressive crust damage, cracks and a 32-piece Earth breakup.
+- HDR rendering, bloom, emissive materials and impact lights.
+- A shuttle flight followed by a Solar System and Milky Way reveal.
+- Music and impact sounds synchronized with the cinematic timeline.
+- A free FPS camera for exploring the scene while the sequence continues.
+
+## Features
+
+### Cinematic sequence
+
+The main sequence lasts approximately 110 seconds. It starts with an intact
+Earth, builds through several meteor waves, triggers the destruction sequence,
+then pulls back from the shuttle to the Solar System and the galaxy.
+
+### Meteor simulation
+
+Meteors are generated on the CPU with reproducible random seeds. Their
+continuous collision detection prevents tunneling at high speed. Impacts feed
+the damage, heat, particle, light and audio systems independently.
+
+### Earth destruction
+
+Impact energy accumulates into a global destruction level. The surface develops
+burn marks, temporary heat and procedural cracks before the Earth separates into
+animated fragments around an emissive core.
+
+### Rendering
+
+The renderer uses shared meshes and materials, instanced particles, textured
+planets, transparent Saturn rings and an HDR pipeline with bloom. The design
+keeps simulation, scene management and rendering in separate modules.
+
+### Audio
+
+The cinematic music drives the visible timeline when it is available. FFmpeg
+converts the supplied MP3 files to WAV during the build, while SDL3 handles
+playback, volume, mute and impact sounds.
+
+## Requirements
+
+- Linux with an X11 display
+- C++17 compiler and GNU Make
+- OpenGL 3.3+
+- GLFW 3, GLEW, GLM and SDL3 development packages
+- FFmpeg
+
+The project expects the libraries to be discoverable through `pkg-config`:
+`glfw3`, `glew` and `sdl3`.
+
+## Build and run
+
+Run these commands from the project directory:
+
+```bash
+make              # Build the application
+make run          # Build and launch the cinematic
+make test         # Run CPU and audio tests
+make test-runtime # Run the hidden-window OpenGL test suite
+make clean        # Remove build files and generated executables
+```
+
+`make test-runtime` needs a working X11 display even though the test window is
+hidden. The build generates converted audio files in `build/music/`; the
+original MP3 files remain unchanged.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| `Space` | Pause or resume the sequence and music |
+| `R` | Restart the complete cinematic |
+| `Left` / `Right` | Seek backward or forward by 10 seconds |
+| `Up` / `+` | Double playback speed, up to 8x |
+| `Down` / `-` | Halve playback speed, down to 0.25x |
+| `0` | Restore normal speed |
+| `M` | Mute or unmute audio |
+| `F3` | Switch between cinematic and FPS camera |
+| `W` / `S` | Move forward or backward in FPS mode |
+| `A` / `D` | Strafe left or right in FPS mode |
+| `Z` / `X` | Move up or down in FPS mode |
+| Mouse | Look around in FPS mode |
+| `G` / `H` | Increase or decrease FPS movement speed |
+| `F1` | Toggle wireframe rendering |
+| `F2` | Toggle camera information |
+| `Esc` | Quit |
+
+## Project structure
 
 ```text
-projet/
-├── Makefile
-├── README.md
-├── src/
-│   ├── main.cpp
-│   ├── Application.h / Application.cpp
-│   ├── camera/
-│   │   ├── Camera.h / Camera.cpp
-│   │   └── CinematicCamera.h / CinematicCamera.cpp
-│   ├── graphics/
-│   │   ├── Mesh.h / Mesh.cpp
-│   │   ├── ShaderProgram.h / ShaderProgram.cpp
-│   │   ├── Texture2D.h / Texture2D.cpp
-│   │   └── Renderer.h / Renderer.cpp
-│   ├── geometry/
-│   │   └── Sphere.h / Sphere.cpp
-│   ├── scene/
-│   │   ├── Scene.h
-│   │   ├── SceneObject.h
-│   │   ├── Transform.h
-│   │   ├── Material.h
-│   │   ├── LightManager.h / LightManager.cpp
-│   │   ├── SceneResources.h
-│   │   └── SceneSetup.h / SceneSetup.cpp
-│   ├── animation/
-│   │   ├── Keyframe.h
-│   │   ├── Easing.h / Easing.cpp
-│   │   ├── AnimationTrack.h
-│   │   ├── Timeline.h / Timeline.cpp
-│   │   ├── TimelineTrack.h
-│   │   ├── CameraTrack.h
-│   │   ├── TransformTrack.h
-│   │   └── EventTrack.h
-│   └── cinematic/
-│       └── MainSequence.h / MainSequence.cpp
-├── shaders/                  # programmes GLSL exécutés par le GPU
-├── textures/                 # images de la Terre, du Soleil et de l'espace
-├── tests/
-│   ├── timeline.cpp
-│   ├── main_sequence.cpp
-│   └── application.cpp
-├── build/                    # objets, dépendances et tests compilés, ignorés par Git
-└── project                   # exécutable généré
+src/
+├── Application.cpp       Application loop, input and system orchestration
+├── animation/            Timeline, keyframes and animation tracks
+├── audio/                SDL3 music and impact playback
+├── camera/               FPS, orbit and cinematic cameras
+├── cinematic/            Main film sequence and scene choreography
+├── geometry/             Sphere generation and collision geometry
+├── graphics/             Meshes, shaders, textures, HDR and particles
+├── scene/                Objects, materials, lights and scene setup
+└── systems/              Meteors, solar system, damage, breakup and particles
+
+shaders/                  GLSL vertex and fragment shaders
+textures/                 Planet, space and effect textures
+models/                   Shuttle model and material data
+audio/                    Music and impact sound sources
+tests/                    CPU, audio and OpenGL integration tests
 ```
 
-Un `.h` expose les classes et fonctions utilisables depuis d'autres fichiers.
-Le `.cpp` correspondant contient leur implémentation. Les petites classes et
-les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h`.
+## Testing
 
-## Rôle de chaque fichier
+The test suite covers deterministic replay, animation, orbital motion, meteor
+spawning and collision, particle and trail emission, impact lights, Earth
+damage and heat, destruction level, breakup state and audio behavior.
 
-| Fichier ou paire `.h` / `.cpp` | Ce qu'il fait |
-| --- | --- |
-| `src/main.cpp` | Crée `Application`, appelle `init()` puis `run()`. Le destructeur ferme l'application. |
-| `src/Application` | Possède la fenêtre et les systèmes du moteur. Initialise OpenGL, traite clavier/souris, avance la Timeline, appelle le Renderer, calcule les FPS et gère la fermeture. |
-| `camera/Camera` | Définit la base `Camera` et ses vecteurs de vue. Contient aussi `FPSCamera` (déplacement libre) et `OrbitCamera` (rotation autour d'une cible). |
-| `camera/CinematicCamera` | Évalue les pistes de position, de cible et de FOV, ou les pistes d'orbite (rayon, yaw, pitch, cible), pour calculer la caméra à un instant donné. |
-| `graphics/Mesh` | Stocke les sommets (positions, normales, UV, tangentes), charge un OBJ, crée les buffers OpenGL et dessine la géométrie. |
-| `graphics/ShaderProgram` | Lit, compile et lie les shaders GLSL. Active le programme et transmet les uniforms, par exemple les matrices et les paramètres de lumière. |
-| `graphics/Texture2D` | Charge une image avec stb_image, crée la texture OpenGL et la lie à une unité de texture. |
-| `graphics/Renderer` | Parcourt les objets de la scène. Applique leurs matériaux, textures, uniforms et états OpenGL, puis appelle leur mesh. |
-| `geometry/Sphere` | Génère les sommets d'une sphère avec normales, UV et tangentes, puis les fournit à un `Mesh`. |
-| `scene/Scene.h` | Contient les objets et permet de les ajouter ou de les retrouver par nom/index. |
-| `scene/SceneObject.h` | Représente un objet nommé : une transformation, un mesh et un matériau. |
-| `scene/Transform.h` | Stocke position, rotation et échelle. Produit la matrice de modèle utilisée pour placer l'objet. Les rotations sont en radians. |
-| `scene/Material.h` | Décrit l'apparence et les états de rendu : shader, textures, uniforms, transparence, profondeur et réception de lumière. |
-| `scene/LightManager` | Stocke une lumière directionnelle et les lumières ponctuelles, puis transmet leurs paramètres aux shaders. |
-| `scene/SceneResources.h` | Possède les shaders, textures et sphères de la démonstration. Les objets empruntent ces ressources sans les posséder. |
-| `scene/SceneSetup` | Charge les ressources et construit Terre, nuages, Soleil, étoiles et lumière. Maintient aussi les étoiles autour de la caméra. |
-| `animation/Keyframe.h` | Définit une clé : instant, valeur et easing du segment suivant. |
-| `animation/Easing` | Définit les courbes Linear, EaseIn, EaseOut et EaseInOut utilisées pour accélérer ou ralentir les interpolations. |
-| `animation/AnimationTrack.h` | Stocke des clés d'une valeur (`float`, `glm::vec3`, etc.) et calcule la valeur interpolée à un instant donné. Ajouter les clés par temps croissant. |
-| `animation/TimelineTrack.h` | Définit l'interface commune des pistes exécutables : `update(previousTime, time)` et `reset(time)`. |
-| `animation/Timeline` | Possède et exécute les pistes, gère le temps, la durée, la lecture, la pause et le retour à zéro. Ne connaît pas le contenu du film. |
-| `animation/CameraTrack.h` | Relie la Timeline à `CinematicCamera` pour évaluer la caméra au temps courant. |
-| `animation/TransformTrack.h` | Anime position, rotation et échelle d'une transformation. Un résolveur permet de retrouver un objet même après réallocation du vecteur de scène. |
-| `animation/EventTrack.h` | Déclenche des callbacks aux instants prévus, une fois par passage, même si une frame traverse plusieurs événements. |
-| `cinematic/MainSequence` | Décrit le film actuel : orbite et zoom de 30 secondes, FOV, rotations Terre/nuages et événements. |
-| `tests/timeline.cpp` | Vérifie les pistes, la pause, la reprise, la fin, les événements et la relecture. |
-| `tests/main_sequence.cpp` | Vérifie les paramètres de la séquence complète et les bindings après ajout d'objets. |
-| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte trois captures dans `/tmp`. |
-| `Makefile` | Compile et lie l'application et les tests, suit les dépendances entre headers et sources, lance l'application ou nettoie les fichiers générés. |
-| `.gitignore` | Exclut notamment l'exécutable et le dossier de compilation `build/` du suivi Git. |
+The runtime tests also exercise OpenGL resource loading, HDR/bloom rendering,
+occlusion, particle instancing, reset behavior and full-sequence replay.
+Generated diagnostic captures are written to `/tmp` by the runtime tests.
 
-Les chemins `camera/`, `graphics/`, etc. de ce tableau sont relatifs à `src/`.
+## Assets
 
-## Shaders et textures
+The project uses the supplied textures, shuttle model and audio files. Paths
+are resolved relative to the project root, so launch the application with
+`make run` or from this directory:
 
-Chaque paire de shaders comporte un `.vert` qui traite les sommets et un `.frag`
-qui calcule la couleur des fragments :
-
-- `earth.vert` / `earth.frag` : Terre, éclairage jour/nuit, normal map et spéculaire.
-- `clouds.vert` / `clouds.frag` : couche de nuages avec transparence et éclairage.
-- `sun.vert` / `sun.frag` : surface lumineuse du Soleil.
-- `stars.vert` / `stars.frag` : fond étoilé.
-
-`textures/earth/` contient les cartes jour, nuit, nuages, normales et spéculaire ;
-`textures/sun/` la surface du Soleil ; `textures/space/` le ciel étoilé.
-
-## Comment les systèmes travaillent ensemble
-
-`Application` demande à `SceneSetup` de construire le monde et à `MainSequence`
-de configurer le film. À chaque frame, elle traite les entrées, avance `Timeline`
-(qui met à jour la caméra et les transformations), puis demande à `Renderer`
-de dessiner `Scene` avec `LightManager` et la caméra cinématique.
-
-Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
-les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
-nécessaire, `SceneResources`. Pour changer le fonctionnement du rendu, modifier
-`Renderer` ou les shaders.
-
-Les ressources GPU sont construites après la création du contexte OpenGL.
-À la fermeture, `Application` libère les pistes, les objets et les ressources
-avant de détruire la fenêtre et de terminer GLFW.
-
-## Compilation et inclusions
-
-Toutes les inclusions internes partent de `src/`, fourni par `-Isrc` :
-
-```cpp
-#include "camera/Camera.h"
-#include "graphics/Mesh.h"
-#include "geometry/Sphere.h"
-#include "animation/Timeline.h"
+```bash
+./project
 ```
 
-Les objets `.o`, dépendances `.d` et exécutables de test vont dans `build/`.
-Les options `-MMD -MP` permettent à Make de recompiler les fichiers affectés
-lorsqu'un header change. Pour ajouter un nouveau `.cpp` au moteur, l'ajouter à
-`COMMON_SRC` dans le Makefile. Les nouveaux headers sont détectés par les inclusions.
+## License
 
-Depuis `projet` (les chemins de shaders et textures sont relatifs à ce dossier) :
-
-```sh
-make                  # compile l'application, sans la lancer
-make project          # même compilation
-make run              # compile si nécessaire, puis lance l'application
-make test             # tests Timeline et MainSequence, sans fenêtre
-make test-sequence    # seulement le test de séquence
-make test-runtime     # test OpenGL masqué, nécessite un affichage X11
-make clean            # supprime build/ et l'exécutable project
-```
-
-Le test runtime provoque volontairement des erreurs de chargement pour vérifier
-la récupération. Ses captures sont `/tmp/space-start.ppm`, `/tmp/space-middle.ppm`
-et `/tmp/space-end.ppm`.
+No license has been specified for this project yet.

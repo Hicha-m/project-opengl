@@ -15,6 +15,9 @@ public:
 	virtual ~Texture2D();
 
 	bool loadTexture(const string& fileName, bool generateMipMaps = true);
+	// Dynamic single-channel texture (R8 mask or R32F scalar), no mipmaps. S repeats; T clamps at poles.
+	bool createRed(int width, int height, const float* pixels, bool floatingPoint = false);
+	bool updateRed(int width, int height, const float* pixels);
 	void bind(GLuint texUnit = 0);
 	void unbind(GLuint texUnit = 0);
 
@@ -27,5 +30,6 @@ private:
 	Texture2D& operator=(Texture2D&&) noexcept;
 
 	GLuint mTexture;
+	int mRedWidth = 0, mRedHeight = 0;
 };
 #endif //TEXTURE2D_H

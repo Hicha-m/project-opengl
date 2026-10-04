@@ -13,10 +13,12 @@ public:
     );
 
     Mesh& getMesh();
+    float getRadius() const { return mRadius; }
 
 private:
 
     Mesh mMesh;
+    float mRadius;
 
     void generateMesh(
         float radius,

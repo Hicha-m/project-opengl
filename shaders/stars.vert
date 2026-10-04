@@ -9,10 +9,12 @@ uniform mat4 view;
 uniform mat4 projection;
 
 out vec2 TexCoord;
+out vec3 SkyDirection;
 
 void main()
 {
     TexCoord = texCoord;
+    SkyDirection = pos;
 
     vec4 clipPosition =
         projection *

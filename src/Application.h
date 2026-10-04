@@ -7,15 +7,26 @@
 #include "graphics/Renderer.h"
 #include "animation/Timeline.h"
 #include "camera/CinematicCamera.h"
+#include "systems/MeteorSystem.h"
+#include "systems/MeteorShower.h"
+#include "systems/ImpactLightSystem.h"
+#include "systems/ImpactParticleEmitter.h"
+#include "systems/MeteorTrailEmitter.h"
+#include "systems/EarthDamageSystem.h"
+#include "systems/EarthBreakupSystem.h"
+#include "systems/SolarSystem.h"
+#include "audio/MusicPlayer.h"
+#include "graphics/HDRPipeline.h"
 
 struct GLFWwindow;
 
 struct ApplicationOptions
 {
-    int width = 1024;
-    int height = 768;
-    bool fullscreen = true;
+    int width = 1280;
+    int height = 720;
+    bool fullscreen = false;
     bool visible = true;
+    bool music = true;
 };
 
 class Application
@@ -29,10 +40,24 @@ public:
     bool init();
     void run(std::size_t frameLimit = 0); // zero: run until window closes
     void shutdown();
+    void restartSequence();
+    void seekSequence(float seconds);
+    void setPlaybackRate(float rate);
+    void toggleSequencePause();
+    float sequenceTime() const { return mTimeline.getTime(); }
+    float playbackRate() const { return mPlaybackRate; }
+    bool sequencePaused() const { return mSequencePaused; }
+    MeteorSystem& meteors() { return mMeteorSystem; }
+    ParticleSystem& particles() { return mParticleSystem; }
+    const EarthBreakupSystem& earthBreakup() const { return mEarthBreakupSystem; }
+    const EarthDamageSystem& earthDamage() const { return mEarthDamageSystem; }
+    const ImpactLightSystem& impactLights() const { return mImpactLightSystem; }
 
 private:
     bool initOpenGL();
     void update(float deltaTime);
+    void simulate(float deltaTime, bool audible);
+    void resetSequenceState();
     void updateInput(float deltaTime);
     void render();
     void showFPS(double currentTime);
@@ -47,6 +72,12 @@ private:
     bool mInitialized = false;
     bool mWireframe = false;
     bool mCameraDebug = false;
+    bool mFPSMode = false;
+    bool mMusicMuted = false;
+    MusicPlayer mMusic;
+    float mPlaybackRate=1;
+    bool mSequencePaused=false;
+    bool mClockResync=false;
     float mMoveSpeed = 5.0f;
     double mFPSStart = 0;
     unsigned mFrameCount = 0;
@@ -54,10 +85,20 @@ private:
 
     // Reset explicitly in shutdown while the context is still current.
     std::unique_ptr<SceneResources> mResources;
+    std::unique_ptr<HDRPipeline> mHDR;
     Scene mScene;
     Renderer mRenderer;
     LightManager mLightManager;
     FPSCamera mFPSCamera;
     CinematicCamera mCinematicCamera;
     Timeline mTimeline;
+    MeteorSystem mMeteorSystem;
+    ImpactLightSystem mImpactLightSystem;
+    ParticleSystem mParticleSystem;
+    ImpactParticleEmitter mImpactParticleEmitter{mParticleSystem};
+    MeteorTrailEmitter mMeteorTrailEmitter{mParticleSystem};
+    EarthDamageSystem mEarthDamageSystem;
+    EarthBreakupSystem mEarthBreakupSystem;
+    MeteorShower mMeteorShower{mMeteorSystem};
+    SolarSystem mSolarSystem;
 };

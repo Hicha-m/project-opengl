@@ -17,6 +17,11 @@ struct Vertex
     glm::vec3 tangent;
 };
 
+struct MeshSection {
+    std::string material;
+    std::size_t first=0, count=0;
+};
+
 class Mesh
 {
 public:
@@ -26,6 +31,8 @@ public:
 
 	bool loadOBJ(const std::string& filename);
 	void draw();
+    const std::vector<Vertex>& vertices() const { return mVertices; }
+    const std::vector<MeshSection>& sections() const { return mSections; }
 
 	// Permet à Sphere de construire directement un Mesh
     void setVertices(
@@ -38,6 +45,7 @@ private:
 
 	bool mLoaded;
 	std::vector<Vertex> mVertices;
+    std::vector<MeshSection> mSections;
 	GLuint mVBO, mVAO;
 };
 
