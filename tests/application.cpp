@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 #include <iostream>
+#include <cmath>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -28,6 +29,79 @@ static void capture(const char* path, int width, int height)
     assert(image.good());
 }
 
+static std::vector<unsigned char> pixels()
+{
+    std::vector<unsigned char> result(640 * 480 * 3);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, 640, 480, GL_RGB, GL_UNSIGNED_BYTE, result.data());
+    assert(glGetError() == GL_NO_ERROR);
+    return result;
+}
+
+static void checkMeteors(MeteorSystem& system)
+{
+    Renderer renderer;
+    LightManager lights;
+    DirectionalLight light;
+    light.direction = glm::normalize(glm::vec3(-1, -1, -1));
+    lights.setDirectionalLight(light);
+    const glm::vec3 eye(0, 0, 20);
+    const auto view = glm::lookAt(eye, glm::vec3(0), glm::vec3(0, 1, 0));
+    const auto projection = glm::ortho(-14.0f, 14.0f, -10.5f, 10.5f, 0.1f, 100.0f);
+    auto draw = [&]()
+    {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        system.render(renderer, lights, view, projection, eye);
+    };
+    assert(system.graphicsReady());
+    assert(system.initGraphics());
+    draw();
+    const auto empty = pixels();
+    GLint sharedProgram = 0;
+    for (int count : {1, 10, 100, 500})
+    {
+        const int columns = int(std::ceil(std::sqrt(float(count))));
+        const int rows = (count + columns - 1) / columns;
+        const float spacing = count > 100 ? 0.8f : 1.0f;
+        for (int i = 0; i < count; ++i)
+        {
+            Transform transform;
+            transform.position = {float(i % columns) - (columns - 1) * 0.5f,
+                float(i / columns) - (rows - 1) * 0.5f, 0};
+            transform.position *= spacing;
+            transform.scale = glm::vec3(0.3f);
+            assert(system.spawn(transform, {i % 2 ? -0.2f : 0.2f, 0.1f, 0}, 2));
+        }
+        assert(system.size() == std::size_t(count));
+        draw();
+        GLint program = 0;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+        if (!sharedProgram) sharedProgram = program;
+        assert(program != 0 && program == sharedProgram);
+        const auto start = pixels();
+        assert(start != empty);
+        auto path = "/tmp/meteors-" + std::to_string(count) + ".ppm";
+        capture(path.c_str(), 640, 480);
+        system.update(1);
+        draw();
+        assert(pixels() != start); // Actual rendered movement, not just CPU state.
+        if (count == 100) capture("/tmp/meteors-100-moved.ppm", 640, 480);
+        system.update(1);
+        assert(system.size() == 0);
+        draw();
+        assert(pixels() == empty);
+        system.clear();
+        assert(system.graphicsReady() && glIsProgram(sharedProgram));
+    }
+    glUseProgram(0); // A bound program otherwise remains alive until unbound.
+    system.releaseGraphics();
+    system.releaseGraphics();
+    assert(!system.graphicsReady() && !glIsProgram(sharedProgram));
+    draw(); // Rendering without resources safely does nothing.
+    assert(pixels() == empty);
+    assert(system.initGraphics());
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -40,6 +114,14 @@ int main()
     assert(app.init()); // Does not duplicate the scene or create another window.
     app.run(3);
     assert(glGetError() == GL_NO_ERROR);
+    checkMeteors(app.meteors());
+    Transform meteor;
+    meteor.position = {30, 50, 15};
+    meteor.scale = glm::vec3(0.5f);
+    assert(app.meteors().spawn(meteor, {1, 0, 0}, 100));
+    app.run(3); // Also exercise Application's simulation and render integration.
+    assert(app.meteors().size() == 1);
+    assert(app.meteors().meteors()[0].transform.position.x > 30);
     {
         // Exercise the extracted content independently, with the same real context.
         SceneResources resources;
@@ -75,8 +157,10 @@ int main()
     assert(glGetError() == GL_NO_ERROR);
     app.shutdown();
     app.shutdown();
+    assert(app.meteors().size() == 0 && !app.meteors().graphicsReady());
     assert(glfwGetCurrentContext() == nullptr);
     assert(app.init());
+    assert(app.meteors().size() == 0 && app.meteors().graphicsReady());
     app.run(3);
     app.shutdown();
 
@@ -92,6 +176,16 @@ int main()
     std::filesystem::create_directory_symlink(original / "shaders", empty / "shaders");
     assert(!app.init());
     assert(glfwGetCurrentContext() == nullptr);
+    // Scene assets present, meteor shader absent: clean up the whole partial init.
+    std::filesystem::remove(empty / "shaders"); // Remove only the temporary symlink.
+    std::filesystem::create_directory(empty / "shaders");
+    for (const auto& file : std::filesystem::directory_iterator(original / "shaders"))
+        if (file.path().filename() != "meteor.frag")
+            std::filesystem::create_symlink(file.path(), empty / "shaders" / file.path().filename());
+    std::filesystem::create_directory_symlink(original / "textures", empty / "textures");
+    assert(!app.init());
+    assert(glfwGetCurrentContext() == nullptr);
+    assert(!app.meteors().graphicsReady() && app.meteors().size() == 0);
     std::filesystem::current_path(original);
     std::filesystem::remove_all(empty);
     assert(app.init());

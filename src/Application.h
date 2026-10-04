@@ -7,6 +7,7 @@
 #include "graphics/Renderer.h"
 #include "animation/Timeline.h"
 #include "camera/CinematicCamera.h"
+#include "systems/MeteorSystem.h"
 
 struct GLFWwindow;
 
@@ -29,6 +30,7 @@ public:
     bool init();
     void run(std::size_t frameLimit = 0); // zero: run until window closes
     void shutdown();
+    MeteorSystem& meteors() { return mMeteorSystem; }
 
 private:
     bool initOpenGL();
@@ -60,4 +62,5 @@ private:
     FPSCamera mFPSCamera;
     CinematicCamera mCinematicCamera;
     Timeline mTimeline;
+    MeteorSystem mMeteorSystem;
 };

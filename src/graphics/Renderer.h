@@ -19,6 +19,12 @@ public:
     );
 
 
+    // Shared geometry/material with independent transforms, including populations.
+    void renderMesh(
+        Mesh& mesh, Material& material, const Transform& transform,
+        LightManager& lightManager, const glm::mat4& view,
+        const glm::mat4& projection, const glm::vec3& cameraPosition);
+
 private:
 
     void renderObject(

@@ -36,6 +36,10 @@ projet/
 │   │   ├── CameraTrack.h
 │   │   ├── TransformTrack.h
 │   │   └── EventTrack.h
+│   ├── systems/
+│   │   ├── Meteor.h
+│   │   ├── MeteorSystem.h / MeteorSystem.cpp
+│   │   └── MeteorResources.h / MeteorResources.cpp
 │   └── cinematic/
 │       └── MainSequence.h / MainSequence.cpp
 ├── shaders/                  # programmes GLSL exécutés par le GPU
@@ -43,6 +47,7 @@ projet/
 ├── tests/
 │   ├── timeline.cpp
 │   ├── main_sequence.cpp
+│   ├── meteor_system.cpp
 │   └── application.cpp
 ├── build/                    # objets, dépendances et tests compilés, ignorés par Git
 └── project                   # exécutable généré
@@ -63,7 +68,7 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `graphics/Mesh` | Stocke les sommets (positions, normales, UV, tangentes), charge un OBJ, crée les buffers OpenGL et dessine la géométrie. |
 | `graphics/ShaderProgram` | Lit, compile et lie les shaders GLSL. Active le programme et transmet les uniforms, par exemple les matrices et les paramètres de lumière. |
 | `graphics/Texture2D` | Charge une image avec stb_image, crée la texture OpenGL et la lie à une unité de texture. |
-| `graphics/Renderer` | Parcourt les objets de la scène. Applique leurs matériaux, textures, uniforms et états OpenGL, puis appelle leur mesh. |
+| `graphics/Renderer` | Parcourt les objets de la scène. `renderMesh` permet aussi de dessiner un mesh et un matériau partagés avec une transformation indépendante. Applique leurs matériaux, textures, uniforms et états OpenGL, puis appelle leur mesh. |
 | `geometry/Sphere` | Génère les sommets d'une sphère avec normales, UV et tangentes, puis les fournit à un `Mesh`. |
 | `scene/Scene.h` | Contient les objets et permet de les ajouter ou de les retrouver par nom/index. |
 | `scene/SceneObject.h` | Représente un objet nommé : une transformation, un mesh et un matériau. |
@@ -81,9 +86,13 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `animation/TransformTrack.h` | Anime position, rotation et échelle d'une transformation. Un résolveur permet de retrouver un objet même après réallocation du vecteur de scène. |
 | `animation/EventTrack.h` | Déclenche des callbacks aux instants prévus, une fois par passage, même si une frame traverse plusieurs événements. |
 | `cinematic/MainSequence` | Décrit le film actuel : orbite et zoom de 30 secondes, FOV, rotations Terre/nuages et événements. |
+| `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire et durée de vie restante. |
+| `systems/MeteorSystem` | Possède la population, expose spawn/update/clear et dessine les instances avec les ressources communes, sans créer de SceneObject. |
+| `systems/MeteorResources` | Possède une sphère peu détaillée, un shader, la texture lunaire réutilisée et un seul matériau pour toute la population. |
+| `tests/meteor_system.cpp` | Vérifie sans OpenGL le mouvement indépendant, les expirations, les entrées invalides, clear et 1 000 instances. |
 | `tests/timeline.cpp` | Vérifie les pistes, la pause, la reprise, la fin, les événements et la relecture. |
 | `tests/main_sequence.cpp` | Vérifie les paramètres de la séquence complète et les bindings après ajout d'objets. |
-| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte trois captures dans `/tmp`. |
+| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL de la séquence et des météores, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte huit captures dans `/tmp`. |
 | `Makefile` | Compile et lie l'application et les tests, suit les dépendances entre headers et sources, lance l'application ou nettoie les fichiers générés. |
 | `.gitignore` | Exclut notamment l'exécutable et le dossier de compilation `build/` du suivi Git. |
 
@@ -98,6 +107,7 @@ qui calcule la couleur des fragments :
 - `clouds.vert` / `clouds.frag` : couche de nuages avec transparence et éclairage.
 - `sun.vert` / `sun.frag` : surface lumineuse du Soleil.
 - `stars.vert` / `stars.frag` : fond étoilé.
+- `meteor.vert` / `meteor.frag` : roche texturée avec éclairage directionnel et ambiant.
 
 `textures/earth/` contient les cartes jour, nuit, nuages, normales et spéculaire ;
 `textures/sun/` la surface du Soleil ; `textures/space/` le ciel étoilé.
@@ -106,8 +116,10 @@ qui calcule la couleur des fragments :
 
 `Application` demande à `SceneSetup` de construire le monde et à `MainSequence`
 de configurer le film. À chaque frame, elle traite les entrées, avance `Timeline`
-(qui met à jour la caméra et les transformations), puis demande à `Renderer`
-de dessiner `Scene` avec `LightManager` et la caméra cinématique.
+(qui met à jour la caméra et les transformations), avance aussi la simulation de
+`MeteorSystem`, puis demande à `Renderer`
+de dessiner `Scene` et à `MeteorSystem` de dessiner sa population avec les mêmes
+lumières et matrices de caméra.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si
@@ -140,7 +152,7 @@ Depuis `projet` (les chemins de shaders et textures sont relatifs à ce dossier)
 make                  # compile l'application, sans la lancer
 make project          # même compilation
 make run              # compile si nécessaire, puis lance l'application
-make test             # tests Timeline et MainSequence, sans fenêtre
+make test             # tests Timeline, MainSequence et MeteorSystem, sans fenêtre
 make test-sequence    # seulement le test de séquence
 make test-runtime     # test OpenGL masqué, nécessite un affichage X11
 make clean            # supprime build/ et l'exécutable project

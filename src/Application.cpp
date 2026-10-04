@@ -34,6 +34,7 @@ bool Application::init()
     }
     mResources = std::make_unique<SceneResources>();
     if (!SceneSetup::build(mScene, mLightManager, *mResources)
+        || !mMeteorSystem.initGraphics()
         || !MainSequence::build(mTimeline, mCinematicCamera, mScene))
     {
         std::cerr << "Scene initialization failed\n";
@@ -121,6 +122,7 @@ void Application::update(float deltaTime)
 {
     updateInput(deltaTime);
     mTimeline.update(deltaTime);
+    mMeteorSystem.update(deltaTime);
     mDebugTimer += deltaTime;
     if (mDebugTimer >= 1.0)
     {
@@ -160,6 +162,7 @@ void Application::render()
     const auto position = mCinematicCamera.getPosition();
     SceneSetup::update(mScene, position);
     mRenderer.render(mScene, mLightManager, view, projection, position);
+    mMeteorSystem.render(mRenderer, mLightManager, view, projection, position);
 }
 
 void Application::showFPS(double currentTime)
@@ -217,6 +220,8 @@ void Application::shutdown()
 {
     if (mWindow) glfwMakeContextCurrent(mWindow);
     mTimeline = Timeline{}; // Release borrowed scene/camera bindings first.
+    mMeteorSystem.clear();
+    mMeteorSystem.releaseGraphics();
     mScene.objects.clear();
     mResources.reset(); // GPU destructors require the current context.
     mLightManager = LightManager{};

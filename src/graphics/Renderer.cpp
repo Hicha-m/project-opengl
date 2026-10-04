@@ -36,8 +36,16 @@ void Renderer::renderObject(
         return;
 
 
-    Material& material = object.material;
+    renderMesh(*object.mesh, object.material, object.transform,
+        lightManager, view, projection, cameraPosition);
+}
 
+void Renderer::renderMesh(
+    Mesh& mesh, Material& material, const Transform& transform,
+    LightManager& lightManager, const glm::mat4& view,
+    const glm::mat4& projection, const glm::vec3& cameraPosition)
+{
+    if (!material.shader) return;
 
     ShaderProgram* shader = material.shader;
 
@@ -88,7 +96,7 @@ void Renderer::renderObject(
 
     shader->setUniform(
         "model",
-        object.transform.getMatrix()
+        transform.getMatrix()
     );
 
 
@@ -189,7 +197,7 @@ void Renderer::renderObject(
     // Draw
     // --------------------------------------------------
 
-    object.mesh->draw();
+    mesh.draw();
 
 
     // --------------------------------------------------
