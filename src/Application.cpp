@@ -89,6 +89,9 @@ void Application::run(std::size_t frameLimit, bool present)
         WindowSystem::pollEvents();
         if (WindowSystem::shouldClose(mWindow)) break;
         if (WindowSystem::suspended(mWindow)) {
+#ifdef PROJECT_MOBILE
+            if (!mWasSuspended) std::cout << "[MOBILE] simulation suspended timeline=" << mTimeline.getTime() << std::endl;
+#endif
             mMusic.setPaused(true); mWasSuspended = true;
             lastTime = WindowSystem::time(); WindowSystem::wait(); continue;
         }

@@ -67,8 +67,10 @@ def main():
         time.sleep(3)
         if run("adb", "shell", "pidof", ANDROID).strip() != process:
             raise RuntimeError("Android application did not survive background/foreground")
-        wait_for(lambda: logs().count("[MOBILE] foreground resumed") > previous_resumes and timeline(logs()) > before + 0.2, 60)
-        (args.output / "android.log").write_text(logs())
+        try:
+            wait_for(lambda: logs().count("[MOBILE] foreground resumed") > previous_resumes and timeline(logs()) > before + 0.2, 60)
+        finally:
+            (args.output / "android.log").write_text(logs())
     else:
         with (args.application / "Info.plist").open("rb") as source:
             info = plistlib.load(source)

@@ -84,9 +84,11 @@ Window* create(int width, int height, const char* title, bool visible, bool full
     SDL_SetEventFilter([](void* user, SDL_Event* event) -> bool {
         auto* window = static_cast<Window*>(user);
         if (event->type == SDL_EVENT_WILL_ENTER_BACKGROUND) {
+            SDL_Log("[MOBILE] lifecycle background");
             window->background = true;
             if (const auto device = window->audioDevice.load()) SDL_PauseAudioDevice(device);
         } else if (event->type == SDL_EVENT_DID_ENTER_FOREGROUND) {
+            SDL_Log("[MOBILE] lifecycle foreground");
             window->background = false;
             window->resumed = true;
         }
