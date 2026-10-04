@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix="space-étoiles-") as directory:
             shutil.copy2(library, executable.parent / library.name)
     environment = dict(os.environ, SDL_AUDIO_DRIVER="dummy", LIBGL_ALWAYS_SOFTWARE="1")
     if os.name == "posix" and ".app" not in str(executable):
-        libraries = subprocess.check_output(["ldd", str(executable)], text=True)
+        libraries = subprocess.check_output(["ldd", "./project"], cwd=executable.parent, text=True)
         print(libraries, flush=True)
         for name in ("libSDL3", "libglfw", "libGLEW"):
             lines = [line for line in libraries.splitlines() if name in line]
