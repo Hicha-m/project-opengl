@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 // Simple 2D texture class
 //-----------------------------------------------------------------------------
-#include "Texture2D.h"
+#include "graphics/Texture2D.h"
 #include <iostream>
 #include <cassert>
 #define STB_IMAGE_IMPLEMENTATION

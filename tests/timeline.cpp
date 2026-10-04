@@ -1,10 +1,10 @@
 #include <cassert>
 #include <cmath>
 #include <limits>
-#include "src/animation/Timeline.h"
-#include "src/animation/TransformTrack.h"
-#include "src/animation/EventTrack.h"
-#include "src/animation/CameraTrack.h"
+#include "animation/Timeline.h"
+#include "animation/TransformTrack.h"
+#include "animation/EventTrack.h"
+#include "animation/CameraTrack.h"
 
 int main()
 {

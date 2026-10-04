@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 // Basic Mesh class
 //-----------------------------------------------------------------------------
-#include "Mesh.h"
+#include "graphics/Mesh.h"
 #include <iostream>
 #include <sstream>
 #include <fstream>

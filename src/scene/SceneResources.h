@@ -1,7 +1,7 @@
 #pragma once
-#include "ShaderProgram.h"
-#include "Texture2D.h"
-#include "../Sphere.h"
+#include "graphics/ShaderProgram.h"
+#include "graphics/Texture2D.h"
+#include "geometry/Sphere.h"
 
 // Construct only with a current OpenGL context. Destroy before closing it.
 // Scene materials and meshes borrow these resources; do not copy or move them.

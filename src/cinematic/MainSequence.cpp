@@ -1,7 +1,7 @@
-#include "MainSequence.h"
-#include "../animation/CameraTrack.h"
-#include "../animation/TransformTrack.h"
-#include "../animation/EventTrack.h"
+#include "cinematic/MainSequence.h"
+#include "animation/CameraTrack.h"
+#include "animation/TransformTrack.h"
+#include "animation/EventTrack.h"
 #include <iostream>
 
 bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& scene)

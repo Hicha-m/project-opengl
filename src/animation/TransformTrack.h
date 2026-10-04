@@ -1,8 +1,8 @@
 #pragma once
 #include <functional>
-#include "TimelineTrack.h"
-#include "AnimationTrack.h"
-#include "../scene/Transform.h"
+#include "animation/TimelineTrack.h"
+#include "animation/AnimationTrack.h"
+#include "scene/Transform.h"
 
 class TransformTrack : public TimelineTrack
 {

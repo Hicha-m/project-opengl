@@ -1,4 +1,4 @@
-#include "CinematicCamera.h"
+#include "camera/CinematicCamera.h"
 
 #include <cmath>
 

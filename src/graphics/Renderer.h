@@ -2,8 +2,8 @@
 
 #include <glm/glm.hpp>
 
-#include "../scene/Scene.h"
-#include "../scene/LightManager.h"
+#include "scene/Scene.h"
+#include "scene/LightManager.h"
 
 
 class Renderer

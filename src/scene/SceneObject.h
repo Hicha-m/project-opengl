@@ -2,9 +2,9 @@
 
 #include <string>
 
-#include "Transform.h"
-#include "Material.h"
-#include "Mesh.h"
+#include "scene/Transform.h"
+#include "scene/Material.h"
+#include "graphics/Mesh.h"
 
 class SceneObject
 {

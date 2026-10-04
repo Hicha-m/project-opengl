@@ -7,9 +7,9 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
-#include "src/Application.h"
-#include "src/scene/SceneSetup.h"
-#include "src/cinematic/MainSequence.h"
+#include "Application.h"
+#include "scene/SceneSetup.h"
+#include "cinematic/MainSequence.h"
 
 static void capture(const char* path, int width, int height)
 {

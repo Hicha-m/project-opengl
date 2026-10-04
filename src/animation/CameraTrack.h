@@ -1,6 +1,6 @@
 #pragma once
-#include "TimelineTrack.h"
-#include "CinematicCamera.h"
+#include "animation/TimelineTrack.h"
+#include "camera/CinematicCamera.h"
 
 // The camera must outlive its track. Configure keyframes on CinematicCamera.
 class CameraTrack : public TimelineTrack

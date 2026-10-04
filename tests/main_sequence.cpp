@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cmath>
-#include "src/cinematic/MainSequence.h"
+#include "cinematic/MainSequence.h"
 
 int main()
 {

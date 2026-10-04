@@ -1,40 +1,61 @@
 CXX := g++
-CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -std=c++17 -I. $(shell pkg-config --cflags glfw3 glew)
+CPPFLAGS := -Isrc $(shell pkg-config --cflags glfw3 glew)
+CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -std=c++17
 LDLIBS := $(shell pkg-config --libs glfw3 glew) -lGL
 
 TARGET := project
 SCENE ?= src/main
-COMMON_SRC := Camera.cpp Mesh.cpp ShaderProgram.cpp Texture2D.cpp src/Sphere.cpp src/graphics/Renderer.cpp src/scene/LightManager.cpp src/animation/CinematicCamera.cpp src/animation/Easing.cpp src/animation/Timeline.cpp src/Application.cpp src/scene/SceneSetup.cpp src/cinematic/MainSequence.cpp
+BUILD_DIR := build
 
-SRC := $(SCENE).cpp $(COMMON_SRC)
+COMMON_SRC := \
+	src/Application.cpp \
+	src/camera/Camera.cpp \
+	src/camera/CinematicCamera.cpp \
+	src/graphics/Mesh.cpp \
+	src/graphics/ShaderProgram.cpp \
+	src/graphics/Texture2D.cpp \
+	src/graphics/Renderer.cpp \
+	src/geometry/Sphere.cpp \
+	src/scene/LightManager.cpp \
+	src/scene/SceneSetup.cpp \
+	src/cinematic/MainSequence.cpp \
+	src/animation/Easing.cpp \
+	src/animation/Timeline.cpp
 
-.PHONY: all run clean
+COMMON_OBJ := $(COMMON_SRC:%.cpp=$(BUILD_DIR)/%.o)
+MAIN_OBJ := $(BUILD_DIR)/$(SCENE).o
+TEST_NAMES := timeline main_sequence application
+TEST_OBJ := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%.o)
+TEST_BIN := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%)
+DEPS := $(COMMON_OBJ:.o=.d) $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
 
-all: $(TARGET) run
+.PHONY: all run clean test test-sequence test-runtime
+all: $(TARGET)
 
-HEADERS := $(shell rg --files src -g '*.h' -g '!*copy*') $(wildcard *.h)
+$(TARGET): $(MAIN_OBJ) $(COMMON_OBJ)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-$(TARGET): $(SRC) $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ $(SRC) $(LDLIBS)
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(TEST_BIN): $(BUILD_DIR)/tests/%: $(BUILD_DIR)/tests/%.o $(COMMON_OBJ)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 run: $(TARGET)
 	./$(TARGET)
 
+test: $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence
+	./$(BUILD_DIR)/tests/timeline
+	./$(BUILD_DIR)/tests/main_sequence
+
+test-sequence: $(BUILD_DIR)/tests/main_sequence
+	./$(BUILD_DIR)/tests/main_sequence
+
+test-runtime: $(BUILD_DIR)/tests/application
+	./$(BUILD_DIR)/tests/application
+
 clean:
-	rm -f $(TARGET)
+	$(RM) -r $(BUILD_DIR) $(TARGET)
 
-.PHONY: test
-test: test-sequence
-	$(CXX) $(CXXFLAGS) -o /tmp/space-timeline-tests tests/timeline.cpp Camera.cpp src/animation/CinematicCamera.cpp src/animation/Easing.cpp src/animation/Timeline.cpp $(LDLIBS)
-	/tmp/space-timeline-tests
-
-.PHONY: test-sequence test-runtime
-test-sequence:
-	$(CXX) $(CXXFLAGS) -o /tmp/space-sequence-tests tests/main_sequence.cpp Camera.cpp src/animation/CinematicCamera.cpp src/animation/Easing.cpp src/animation/Timeline.cpp src/cinematic/MainSequence.cpp $(LDLIBS)
-	/tmp/space-sequence-tests
-
-/tmp/space-application-tests: tests/application.cpp $(COMMON_SRC) $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ tests/application.cpp $(COMMON_SRC) $(LDLIBS)
-
-test-runtime: /tmp/space-application-tests
-	/tmp/space-application-tests
+-include $(DEPS)

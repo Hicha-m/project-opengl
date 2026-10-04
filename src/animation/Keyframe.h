@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Easing.h"
+#include "animation/Easing.h"
 
 template<typename T>
 struct Keyframe

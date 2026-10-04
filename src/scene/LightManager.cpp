@@ -1,4 +1,4 @@
-#include "LightManager.h"
+#include "scene/LightManager.h"
 
 void LightManager::setDirectionalLight(const DirectionalLight &light)
 {

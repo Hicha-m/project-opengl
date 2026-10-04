@@ -2,7 +2,7 @@
 // Basic camera class including derived orbit-style and first person
 // shooter (FPS) style camera support
 //-----------------------------------------------------------------------------
-#include "Camera.h"
+#include "camera/Camera.h"
 #include "glm/gtc/matrix_transform.hpp"
 
 // Default camera values

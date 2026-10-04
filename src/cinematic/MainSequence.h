@@ -1,7 +1,7 @@
 #pragma once
-#include "../animation/Timeline.h"
-#include "../animation/CinematicCamera.h"
-#include "../scene/Scene.h"
+#include "animation/Timeline.h"
+#include "camera/CinematicCamera.h"
+#include "scene/Scene.h"
 
 namespace MainSequence
 {

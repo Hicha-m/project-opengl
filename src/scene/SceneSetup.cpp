@@ -1,4 +1,4 @@
-#include "SceneSetup.h"
+#include "scene/SceneSetup.h"
 
 namespace
 {

@@ -5,8 +5,8 @@
 
 #include <glm/glm.hpp>
 
-#include "ShaderProgram.h"
-#include "Texture2D.h"
+#include "graphics/ShaderProgram.h"
+#include "graphics/Texture2D.h"
 
 
 struct MaterialTexture

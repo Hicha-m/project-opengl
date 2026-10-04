@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 
-#include "SceneObject.h"
+#include "scene/SceneObject.h"
 
 class Scene
 {

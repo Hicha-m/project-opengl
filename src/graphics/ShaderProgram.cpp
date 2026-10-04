@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 // GLSL shader manager class
 //-----------------------------------------------------------------------------
-#include "ShaderProgram.h"
+#include "graphics/ShaderProgram.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>

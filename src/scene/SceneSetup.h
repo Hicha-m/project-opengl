@@ -1,7 +1,7 @@
 #pragma once
-#include "Scene.h"
-#include "SceneResources.h"
-#include "LightManager.h"
+#include "scene/Scene.h"
+#include "scene/SceneResources.h"
+#include "scene/LightManager.h"
 
 namespace SceneSetup
 {

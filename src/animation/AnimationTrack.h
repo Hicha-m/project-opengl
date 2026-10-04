@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "Keyframe.h"
+#include "animation/Keyframe.h"
 
 template<typename T>
 class AnimationTrack

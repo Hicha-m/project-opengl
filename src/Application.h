@@ -6,7 +6,7 @@
 #include "scene/LightManager.h"
 #include "graphics/Renderer.h"
 #include "animation/Timeline.h"
-#include "animation/CinematicCamera.h"
+#include "camera/CinematicCamera.h"
 
 struct GLFWwindow;
 

@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-#include "ShaderProgram.h"
+#include "graphics/ShaderProgram.h"
 
 
 struct DirectionalLight

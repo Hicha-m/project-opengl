@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Camera.h"
-#include "AnimationTrack.h"
+#include "camera/Camera.h"
+#include "animation/AnimationTrack.h"
 
 class CinematicCamera : public Camera
 {
