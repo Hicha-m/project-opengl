@@ -14,6 +14,9 @@ public:
     ~MusicPlayer();
     bool load(const std::string& wavPath);
     bool restart();
+    bool seek(float seconds);
+    void setPaused(bool paused);
+    bool setPlaybackRate(float rate);
     bool loadImpact(const std::string& wavPath);
     void playImpacts(const std::vector<MeteorImpact>& impacts,const glm::vec3& listener,float time);
     unsigned impactPlayCount() const { return mImpactPlayCount; }
@@ -33,6 +36,9 @@ private:
     SDL_AudioStream* mStream=nullptr;
     std::vector<unsigned char> mPCM;
     double mBytesPerSecond=0;
+    unsigned mBytesPerFrame=0;
+    float mRate=1;
+    bool mPaused=false;
     float mDuration=0, mPosition=0;
     bool mInitialized=false, mRunning=false, mMuted=false;
 };

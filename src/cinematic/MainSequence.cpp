@@ -4,6 +4,7 @@
 #include "animation/EventTrack.h"
 #include "systems/SolarSystem.h"
 #include "systems/EarthBreakupSystem.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 
 namespace {
@@ -15,8 +16,11 @@ namespace {
             : mScene(scene),mCamera(camera) {
             mOrigin=movingEarth?SolarSystem::planetPosition(SolarSystem::Planets[2],30):scene.findObject("Earth")->transform.position;
             const float times[]={0,30,36,44,52,62,78,90,96,100,105,MainSequence::Duration};
-            const float distances[]={8,8,14,26,55,110,240,500,1800,6500,16000,35000};
-            for(unsigned i=0;i<12;++i) mDistance.addKeyframe(times[i],distances[i],EasingType::EaseInOut);
+            const float distances[]={8,8,14,26,55,110,240,500,1800,6500,16000,55000};
+            for(unsigned i=0;i<12;++i) {
+                const auto easing=i<3?EasingType::EaseInOut:EasingType::Linear;
+                mDistance.addKeyframe(times[i],distances[i],easing);
+            }
         }
         void update(float,float time) override { apply(time); }
         void reset(float time) override { apply(time); }
@@ -37,7 +41,10 @@ namespace {
             if(follow>0) {
                 const glm::vec3 up(0,0.519f,0.855f), right(0.958f,-0.246f,0.149f);
                 const float side=1-glm::smoothstep(78.0f,94.0f,time);
-                const auto eye=position+escapeDirection*12.0f+(up*3.0f+right*4.0f)*side;
+                const auto cameraOffset=escapeDirection*12.0f+(up*3.0f+right*4.0f)*side;
+                const float orbitAngle=glm::radians(-18.0f)*glm::smoothstep(60.0f,78.0f,time);
+                const auto rotatedOffset=glm::vec3(glm::rotate(glm::mat4(1.0f),orbitAngle,up)*glm::vec4(cameraOffset,1.0f));
+                const auto eye=position+rotatedOffset;
                 auto framedEye=glm::mix(mCamera.getPosition(),eye,follow);
                 const auto target=glm::mix(mCamera.target(),position,follow);
                 // During the handoff, keep both the planet and craft inside the
@@ -54,7 +61,9 @@ namespace {
                     };
                     fit(earth->transform.position,10.0f*(1-glm::smoothstep(58.0f,60.0f,time)));
                     fit(position,3.2f);
-                    framedEye=target+outward*distance;
+                    const auto fittedEye=target+outward*distance;
+                    const float fitWeight=glm::smoothstep(46.0f,52.0f,time);
+                    framedEye=glm::mix(framedEye,fittedEye,fitWeight);
                 }
                 mCamera.setPose(framedEye,target);
             }

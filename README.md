@@ -594,6 +594,10 @@ ainsi que les ressources de rupture et de post-traitement avant de détruire la 
 
 ### Commandes
 
+- `↑` / `↓` (ou `+` / `−`) : doubler / diviser par deux la vitesse du film, entre ×0,25 et ×8.
+- `0` : retrouver la vitesse ×1.
+- `←` / `→` : reculer / avancer de 10 secondes dans la séquence.
+- `Espace` : pause / reprise du film et du son.
 - `M` : couper ou rétablir la musique sans interrompre le film.
 - `F3` : basculer entre la caméra cinématique et la caméra FPS. La caméra FPS
   démarre depuis la vue actuelle ; la cinématique continue pendant l'exploration.
@@ -652,3 +656,18 @@ Les contacts rapprochés sont espacés d’au moins 0,12 s et seul le contact
 le plus sonore d’une frame est joué. Les contacts avec le noyau n’émettent
 pas ce son. Le flux musical conserve sa propre horloge ; `M` coupe musique
 et impacts, et `R` efface également les sons en cours.
+
+## Navigation dans la séquence
+
+La vitesse, le temps et l’état de pause apparaissent dans le titre de la fenêtre.
+La vitesse s’applique à la musique, aux impacts sonores, à la physique et au vol
+après la fin de la Timeline. SDL change également la hauteur du son avec sa
+vitesse ; aucun traitement de conservation de hauteur n’est ajouté.
+
+Un saut avec les flèches reconstruit toute la scène depuis le début avec des
+pas de 1/60 s, puis repositionne le PCM musical. Les anciens sons d’impact ne
+sont pas rejoués. Le retour avant la rupture restaure la Terre, sa Lune, les
+météores, les cartes de dégâts et de chaleur, les fragments et la navette.
+La reconstruction peut prendre un court moment ; sa durée ne fait pas avancer
+le film. Les sauts restent dans les bornes de la Timeline et conservent la pause
+et la vitesse choisies. `R` retourne au début et reprend la lecture à cette vitesse.

@@ -663,6 +663,26 @@ int main()
     app.restartSequence(); // Safe before initialization.
     assert(app.init());
     assert(app.init()); // Does not duplicate the scene or create another window.
+    app.setPlaybackRate(100); assert(app.playbackRate()==8);
+    app.setPlaybackRate(0.01f); assert(app.playbackRate()==0.25f);
+    app.setPlaybackRate(1);
+    app.seekSequence(35);
+    assert(app.sequenceTime()==35 && !app.earthBreakup().active() && app.earthDamage().destructionLevel()>0);
+    const auto soughtDamage=app.earthDamage().pixels();
+    const auto soughtMeteors=app.meteors().meteors();
+    app.seekSequence(60); assert(app.earthBreakup().active());
+    app.seekSequence(35);
+    assert(app.earthDamage().pixels()==soughtDamage && !app.earthBreakup().active());
+    assert(app.meteors().size()==soughtMeteors.size());
+    for(std::size_t i=0;i<soughtMeteors.size();++i) {
+        assert(app.meteors().meteors()[i].id==soughtMeteors[i].id);
+        assert(app.meteors().meteors()[i].transform.position==soughtMeteors[i].transform.position);
+    }
+    app.toggleSequencePause(); const float pausedAt=app.sequenceTime();
+    app.run(3); assert(app.sequencePaused() && app.sequenceTime()==pausedAt);
+    app.seekSequence(12); assert(app.sequencePaused() && app.sequenceTime()==12);
+    app.seekSequence(-1); assert(app.sequenceTime()==0 && app.earthDamage().destructionLevel()==0);
+    app.restartSequence(); assert(!app.sequencePaused());
     app.run(3);
     assert(glGetError() == GL_NO_ERROR);
     checkMeteors(app.meteors());

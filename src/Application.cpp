@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
+#include <algorithm>
 #include "scene/SceneSetup.h"
 #include "cinematic/MainSequence.h"
 
@@ -118,8 +119,9 @@ void Application::run(std::size_t frameLimit)
     std::size_t frames = 0;
     while (!glfwWindowShouldClose(mWindow))
     {
-        double currentTime = glfwGetTime();
         glfwPollEvents();
+        double currentTime = glfwGetTime();
+        if(mClockResync) { lastTime=currentTime; mClockResync=false; }
         update(static_cast<float>(currentTime - lastTime));
         render();
         showFPS(currentTime);
@@ -132,13 +134,22 @@ void Application::run(std::size_t frameLimit)
 void Application::update(float deltaTime)
 {
     updateInput(deltaTime);
-    const float wallDelta=deltaTime;
+    if(mSequencePaused || !std::isfinite(deltaTime) || deltaTime<=0) return;
     const bool finished=mTimeline.getTime()>=mTimeline.getDuration();
+    deltaTime*=mPlaybackRate;
     if(mMusic.running() && !finished) deltaTime=std::max(0.0f,mMusic.position()-mTimeline.getTime());
-    // Events affect this frame. Existing instances move first; births happen at
-    // the frame boundary and begin moving on the next frame.
+    if(finished) MainSequence::continueEscape(mScene,mCinematicCamera,deltaTime);
+    // Bound physics steps even at x8 or after a slow rendering frame.
+    while(deltaTime>0) {
+        const float step=std::min(deltaTime,1.0f/60);
+        simulate(step,true); deltaTime-=step;
+    }
+    mEarthDamageSystem.upload(mResources->earthDamageTexture,mResources->earthHeatTexture);
+}
+
+void Application::simulate(float deltaTime,bool audible)
+{
     mTimeline.update(deltaTime);
-    if(finished) MainSequence::continueEscape(mScene,mCinematicCamera,wallDelta);
     auto sunlight=mLightManager.getDirectionalLight();
     sunlight.direction=glm::normalize(mScene.findObject("Earth")->transform.position-SolarSystem::SunCenter);
     mLightManager.setDirectionalLight(sunlight);
@@ -153,13 +164,12 @@ void Application::update(float deltaTime)
     mEarthDamageSystem.update(deltaTime);
     if (!hittingCore)
         mEarthDamageSystem.consume(mMeteorSystem.impacts(), earth->transform, mResources->earthSphere.getRadius());
-    mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
     mEarthBreakupSystem.update(deltaTime,mEarthDamageSystem.destructionLevel(),earth->transform);
     // Core contact only absorbs meteors; Earth effects belong to the intact planet.
     if (!hittingCore) {
         mImpactParticleEmitter.consume(mMeteorSystem.impacts());
         mImpactLightSystem.consume(mMeteorSystem.impacts());
-        mMusic.playImpacts(mMeteorSystem.impacts(),mFPSMode?mFPSCamera.getPosition():mCinematicCamera.getPosition(),mTimeline.getTime());
+        if(audible) mMusic.playImpacts(mMeteorSystem.impacts(),mFPSMode?mFPSCamera.getPosition():mCinematicCamera.getPosition(),mTimeline.getTime());
     }
     mImpactLightSystem.update(deltaTime);
     mImpactLightSystem.publish(mLightManager);
@@ -168,7 +178,7 @@ void Application::update(float deltaTime)
     if (mEarthBreakupSystem.active()) mMeteorShower.stop();
     mMeteorShower.update(deltaTime);
     mDebugTimer += deltaTime;
-    if (mDebugTimer >= 1.0)
+    if (audible && mDebugTimer >= 1.0)
     {
         mDebugTimer = 0;
         const auto position = mCinematicCamera.getPosition();
@@ -228,6 +238,8 @@ void Application::showFPS(double currentTime)
     std::ostringstream title;
     title.precision(3);
     title << std::fixed << APP_TITLE << "    FPS: " << fps << "    Frame Time: " << 1000 / fps << " (ms)";
+    title << "    Timeline: " << mTimeline.getTime() << " s  x" << mPlaybackRate
+        << (mSequencePaused?" [pause]":"");
     title << "    Camera: " << (mFPSMode ? "FPS" : "Cinematic");
     if (mCameraDebug)
     {
@@ -280,10 +292,58 @@ void Application::onKey(int key, int action)
     if (key == GLFW_KEY_M) {
         mMusicMuted=!mMusicMuted; mMusic.setMuted(mMusicMuted);
     }
+    if (key == GLFW_KEY_UP || key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD) setPlaybackRate(mPlaybackRate*2);
+    if (key == GLFW_KEY_DOWN || key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT) setPlaybackRate(mPlaybackRate/2);
+    if (key == GLFW_KEY_0 || key == GLFW_KEY_KP_0) setPlaybackRate(1);
+    if (key == GLFW_KEY_LEFT) seekSequence(mTimeline.getTime()-10);
+    if (key == GLFW_KEY_RIGHT) seekSequence(mTimeline.getTime()+10);
+    if (key == GLFW_KEY_SPACE) toggleSequencePause();
     if (key == GLFW_KEY_R) restartSequence();
 }
 
 void Application::restartSequence()
+{
+    if(!mInitialized) return;
+    mSequencePaused=false;
+    mMusic.setPaused(false);
+    seekSequence(0);
+}
+
+void Application::setPlaybackRate(float rate)
+{
+    if(!std::isfinite(rate)) return;
+    mPlaybackRate=std::clamp(rate,0.25f,8.0f);
+    mMusic.setPlaybackRate(mPlaybackRate);
+}
+
+void Application::toggleSequencePause()
+{
+    if(!mInitialized) return;
+    mClockResync=true;
+    mSequencePaused=!mSequencePaused;
+    mMusic.setPaused(mSequencePaused);
+}
+
+void Application::seekSequence(float seconds)
+{
+    if(!mInitialized || !std::isfinite(seconds)) return;
+    seconds=std::clamp(seconds,0.0f,mTimeline.getDuration());
+    mMusic.setPaused(true);
+    resetSequenceState();
+    // Rebuild impacts, heat, fragments and emission RNG as well as the camera.
+    // Historical impact sounds are skipped; upload the maps only at the end.
+    while(mTimeline.getTime()<seconds) simulate(std::min(1.0f/60,seconds-mTimeline.getTime()),false);
+    mEarthDamageSystem.upload(mResources->earthDamageTexture,mResources->earthHeatTexture);
+    mScene.findObject("Earth")->visible=!mEarthBreakupSystem.active();
+    mScene.findObject("EarthClouds")->visible=!mEarthBreakupSystem.active();
+    SceneSetup::update(mScene,mCinematicCamera.getPosition());
+    mDebugTimer=0;
+    if(mMusic.ready()) mMusic.seek(seconds);
+    mMusic.setPaused(mSequencePaused);
+    mClockResync=true;
+}
+
+void Application::resetSequenceState()
 {
     if (!mInitialized) return;
     MainSequence::reset(mTimeline, mMeteorShower, mMeteorSystem);
@@ -304,7 +364,6 @@ void Application::restartSequence()
     mLightManager.setDirectionalLight(sunlight);
     SceneSetup::update(mScene,mCinematicCamera.getPosition());
     mTimeline.play();
-    if(mMusic.ready()) mMusic.restart();
     mDebugTimer = 0;
 }
 
@@ -319,6 +378,7 @@ void Application::shutdown()
 {
     mMusic.release();
     if (mWindow) glfwMakeContextCurrent(mWindow);
+    mSequencePaused=false;
     mTimeline = Timeline{}; // Release borrowed scene/camera bindings first.
     mMeteorShower.reset();
     mMeteorSystem.clear();

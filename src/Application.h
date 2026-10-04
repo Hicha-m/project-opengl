@@ -41,6 +41,12 @@ public:
     void run(std::size_t frameLimit = 0); // zero: run until window closes
     void shutdown();
     void restartSequence();
+    void seekSequence(float seconds);
+    void setPlaybackRate(float rate);
+    void toggleSequencePause();
+    float sequenceTime() const { return mTimeline.getTime(); }
+    float playbackRate() const { return mPlaybackRate; }
+    bool sequencePaused() const { return mSequencePaused; }
     MeteorSystem& meteors() { return mMeteorSystem; }
     ParticleSystem& particles() { return mParticleSystem; }
     const EarthBreakupSystem& earthBreakup() const { return mEarthBreakupSystem; }
@@ -50,6 +56,8 @@ public:
 private:
     bool initOpenGL();
     void update(float deltaTime);
+    void simulate(float deltaTime, bool audible);
+    void resetSequenceState();
     void updateInput(float deltaTime);
     void render();
     void showFPS(double currentTime);
@@ -67,6 +75,9 @@ private:
     bool mFPSMode = false;
     bool mMusicMuted = false;
     MusicPlayer mMusic;
+    float mPlaybackRate=1;
+    bool mSequencePaused=false;
+    bool mClockResync=false;
     float mMoveSpeed = 5.0f;
     double mFPSStart = 0;
     unsigned mFrameCount = 0;

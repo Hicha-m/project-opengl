@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <iostream>
+#include <cmath>
 
 MusicPlayer::~MusicPlayer() { release(); }
 bool MusicPlayer::load(const std::string& path) {
@@ -11,7 +12,8 @@ bool MusicPlayer::load(const std::string& path) {
     SDL_AudioSpec spec{}; Uint8* data=nullptr; Uint32 length=0;
     if(!SDL_LoadWAV(path.c_str(),&spec,&data,&length)) { release(); return false; }
     mPCM.assign(data,data+length); SDL_free(data);
-    mBytesPerSecond=double(spec.freq)*spec.channels*(SDL_AUDIO_BITSIZE(spec.format)/8);
+    mBytesPerFrame=spec.channels*(SDL_AUDIO_BITSIZE(spec.format)/8);
+    mBytesPerSecond=double(spec.freq)*mBytesPerFrame;
     if(mBytesPerSecond<=0 || mPCM.empty()) { release(); return false; }
     mDuration=float(mPCM.size()/mBytesPerSecond);
     mDevice=SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec);
@@ -21,22 +23,42 @@ bool MusicPlayer::load(const std::string& path) {
     mStream=SDL_CreateAudioStream(&spec,&output);
     if(mStream && !SDL_BindAudioStream(mDevice,mStream)) { release(); return false; }
     if(!mStream) { std::cerr<<"Music unavailable: "<<SDL_GetError()<<"\n"; release(); return false; }
+    setPlaybackRate(mRate);
     setMuted(mMuted);
     return true;
 }
-bool MusicPlayer::restart() {
-    if(!mStream) return false;
+bool MusicPlayer::restart() { return seek(0); }
+bool MusicPlayer::seek(float seconds) {
+    if(!mStream || !std::isfinite(seconds)) return false;
+    seconds=std::clamp(seconds,0.0f,mDuration);
     SDL_PauseAudioStreamDevice(mStream);
     for(auto& voice:mVoices) if(voice.stream) SDL_ClearAudioStream(voice.stream);
     mLastImpactTime=-1; mNextVoice=mImpactPlayCount=0;
-    if(!SDL_ClearAudioStream(mStream) || !SDL_PutAudioStreamData(mStream,mPCM.data(),int(mPCM.size()))
+    const std::size_t offset=std::min(mPCM.size(),std::size_t(double(seconds)*mBytesPerSecond)/mBytesPerFrame*mBytesPerFrame);
+    if(!SDL_ClearAudioStream(mStream)
+        || (offset<mPCM.size() && !SDL_PutAudioStreamData(mStream,mPCM.data()+offset,int(mPCM.size()-offset)))
         || !SDL_FlushAudioStream(mStream)) { mRunning=false; return false; }
-    mPosition=0;
-    mRunning=SDL_ResumeAudioStreamDevice(mStream);
+    mPosition=float(offset/mBytesPerSecond);
+    mRunning=true;
+    if(!mPaused) mRunning=SDL_ResumeAudioStreamDevice(mStream);
     return mRunning;
 }
+void MusicPlayer::setPaused(bool paused) {
+    if(mStream && paused && !mPaused) position();
+    mPaused=paused;
+    if(mStream) {
+        if(paused) SDL_PauseAudioStreamDevice(mStream);
+        else if(mRunning) SDL_ResumeAudioStreamDevice(mStream);
+    }
+}
+bool MusicPlayer::setPlaybackRate(float rate) {
+    if(!std::isfinite(rate) || rate<0.25f || rate>8) return false;
+    if(mStream && !SDL_SetAudioStreamFrequencyRatio(mStream,rate)) return false;
+    for(auto& voice:mVoices) if(voice.stream) SDL_SetAudioStreamFrequencyRatio(voice.stream,rate);
+    mRate=rate; return true;
+}
 float MusicPlayer::position() {
-    if(!mStream || !mRunning) return mPosition;
+    if(!mStream || !mRunning || mPaused) return mPosition;
     const int remaining=SDL_GetAudioStreamQueued(mStream);
     if(remaining<0) { mRunning=false; return mPosition; }
     const float consumed=float((double(mPCM.size())-remaining)/mBytesPerSecond);
@@ -53,7 +75,7 @@ void MusicPlayer::release() {
     mImpactPCM.clear(); mLastImpactTime=-1; mNextVoice=mImpactPlayCount=0;
     if(mStream) SDL_DestroyAudioStream(mStream);
     if(mDevice) SDL_CloseAudioDevice(mDevice);
-    mDevice=0;
+    mDevice=0; mPaused=false;
     mStream=nullptr; mRunning=false; mPCM.clear(); mPosition=mDuration=0; mBytesPerSecond=0;
     if(mInitialized) SDL_QuitSubSystem(SDL_INIT_AUDIO);
     mInitialized=false;
@@ -75,10 +97,11 @@ bool MusicPlayer::loadImpact(const std::string& path) {
             mImpactPCM.clear(); return false;
         }
     }
+    setPlaybackRate(mRate);
     return true;
 }
 void MusicPlayer::playImpacts(const std::vector<MeteorImpact>& impacts,const glm::vec3& listener,float time) {
-    if(!mRunning || mImpactPCM.empty() || impacts.empty() || time-mLastImpactTime<0.12f) return;
+    if(!mRunning || mPaused || mImpactPCM.empty() || impacts.empty() || time-mLastImpactTime<0.12f) return;
     float gain=0;
     for(const auto& impact:impacts) {
         const float distance=glm::distance(listener,impact.position);
