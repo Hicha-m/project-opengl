@@ -106,7 +106,7 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `animation/CameraTrack.h` | Relie la Timeline à `CinematicCamera` pour évaluer la caméra au temps courant. |
 | `animation/TransformTrack.h` | Anime position, rotation et échelle d'une transformation. Un résolveur permet de retrouver un objet même après réallocation du vecteur de scène. |
 | `animation/EventTrack.h` | Déclenche des callbacks aux instants prévus, une fois par passage, même si une frame traverse plusieurs événements. |
-| `cinematic/MainSequence` | Décrit le film de 30 secondes : caméra, rotations, configuration de pluie, événements start/stop à 10/20 secondes et reset de son état. |
+| `cinematic/MainSequence` | Décrit le film de 90 secondes : caméra, rotations lentes, vagues de bombardement croissantes, plan final et reset. |
 | `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire, durée de vie restante et MeteorId stable. |
 | `systems/MeteorSystem` | Possède la population, simule les instances, détecte les contacts continus et expose les impacts de frame. Dessine avec les ressources communes, sans SceneObject par météore. |
 | `systems/MeteorResources` | Possède une sphère peu détaillée, un shader, la texture lunaire réutilisée et un seul matériau pour toute la population. |
@@ -382,8 +382,8 @@ sont pas dupliquées ou remplacées.
 Le budget cinématique de destruction est désormais 450 : les impacts de la
 pluie existante atteignent ainsi le seuil de rupture en fin de bombardement
 (avec le budget précédent de 1 000, le niveau final restait proche de 0,486).
-Le seuil reste centralisé dans `EarthBreakupSystem::Threshold`. Le réglage fin
-de la caméra et du rythme relève encore de la phase 4.9.
+Le seuil reste centralisé dans `EarthBreakupSystem::Threshold`. La phase 4.9
+orchestre désormais la caméra et le rythme du bombardement.
 
 `HDRPipeline` rend toute la scène dans une cible RGBA16F avec profondeur,
 extrait les valeurs lumineuses au-dessus de 1, applique huit passes de flou
@@ -421,6 +421,57 @@ terrestre avec le rendu précédent, et le halo solaire avec/sans bloom. Les
 captures de comparaison sont `/tmp/earth-color-legacy.ppm`,
 `/tmp/earth-color-corrected.ppm`, `/tmp/sun-without-halo.ppm` et
 `/tmp/sun-with-halo.ppm`.
+
+## Séquence finale — phase 4.9
+
+`MainSequence` assemble un film de **90 secondes** avec les systèmes existants.
+La Terre et les nuages tournent lentement (2 et 2,3 degrés/s), pour laisser
+lire les impacts attachés à la surface. La caméra garde la Terre au centre,
+orbite doucement puis recule pour suivre l'expansion des morceaux.
+
+| Temps | Mise en scène |
+| --- | --- |
+| 0–8 s | Terre intacte, plan d'installation. |
+| 8–24 s | Premiers météores à 0,5/s, échelles 0,15–0,35 ; temps d'approche réel. |
+| 24–40 s | Vague à 2/s, échelles 0,18–0,5 ; impacts, brûlures et incandescence. |
+| 40–48 s | Vague à 5/s, échelles 0,22–0,75 ; montée du niveau de destruction et fissures. |
+| 48–62 s | Vague maximale à 9/s, échelles 0,25–1,1 si la Terre est encore intacte. |
+| Après la rupture–90 s | Arrêt des naissances, recul de caméra, fragments autour du noyau blanc et bloom. |
+
+La zone d'émission est centrée 160 unités au-dessus de la Terre, avec
+110 unités d'étendue horizontale et 10 en hauteur. Les météores naissent
+hors du cadre des plans cinématiques, puis entrent naturellement dans le
+champ. `MeteorShower` peut viser un disque de rayon 8,5 autour du centre
+terrestre : les origines variées produisent des approches diagonales depuis
+plusieurs directions, sans dépendre de la caméra. Les vitesses de 12–18 et
+les durées de vie de 30–34 secondes permettent d'atteindre la Terre.
+`setEmission` change la cadence et la plage de tailles sans resemer le RNG
+ni perdre le crédit d'émission ; `reset` restaure les valeurs initiales.
+
+Les dégâts, la chaleur et les fissures restent calculés par leurs systèmes.
+La rupture reste déclenchée par le seuil de destruction, sans forcer un
+instant d'explosion dans la Timeline. Au stepping de 0,25 s testé, elle
+survient à **52 s après 43 impacts**, laissant **38 s de plan final**.
+Le noyau publie alors sa lumière et son émission HDR alimente le bloom
+existant. Après rupture, `Application` arrête la pluie et simule les météores
+restants sans collider terrestre, jusqu'à leur expiration. Les 32 fragments
+préparés s'éloignent : aucune population supplémentaire de débris n'est créée.
+Les particules disparaissent selon leur courte durée de vie. La roche des
+météores reste texturée, sans nouvelle fissuration ou fragmentation.
+
+`R` remet à zéro la Timeline, les poses, l'émission, le RNG, les IDs, les
+flashes, les particules, les traînées, les cartes GPU de dégâts/chaleur,
+le niveau de destruction et la rupture ; la Terre et ses nuages redeviennent
+visibles immédiatement. Les tests vérifient les naissances hors champ, les
+angles et tailles variés, la progression jusqu'à la rupture et l'égalité
+exacte de deux replays avec le même stepping. Les tests OpenGL comparent
+également huit images sur les 90 secondes, les cartes, les impacts, les
+particules et les lumières. Captures : `/tmp/space-start.ppm`, `/tmp/space-middle.ppm`,
+`/tmp/space-bombardment.ppm`, `/tmp/space-cracks.ppm`,
+`/tmp/space-breakup.ppm`, `/tmp/space-core.ppm`,
+`/tmp/space-fragments.ppm` et `/tmp/space-end.ppm`.
+Le temps de rupture peut légèrement varier avec
+un autre stepping ; tous les resets à stepping identique rejouent le même film.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si

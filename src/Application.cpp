@@ -130,7 +130,8 @@ void Application::update(float deltaTime)
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
     mMeteorTrailEmitter.observe(mMeteorSystem.meteors());
-    mMeteorSystem.update(deltaTime, SceneSetup::earthCollider(mScene, *mResources));
+    if (mEarthBreakupSystem.active()) mMeteorSystem.update(deltaTime);
+    else mMeteorSystem.update(deltaTime, SceneSetup::earthCollider(mScene, *mResources));
     // Advance existing particles before births, so every burst is visible at age zero.
     mParticleSystem.update(deltaTime);
     mMeteorTrailEmitter.update(mMeteorSystem.meteors(), deltaTime);
@@ -144,6 +145,8 @@ void Application::update(float deltaTime)
     mImpactLightSystem.update(deltaTime);
     mImpactLightSystem.publish(mLightManager);
     mEarthBreakupSystem.publish(mLightManager);
+    // No invisible Earth collider or new bombardment after the physical rupture.
+    if (mEarthBreakupSystem.active()) mMeteorShower.stop();
     mMeteorShower.update(deltaTime);
     mDebugTimer += deltaTime;
     if (mDebugTimer >= 1.0)
@@ -267,6 +270,9 @@ void Application::restartSequence()
     mImpactLightSystem.publish(mLightManager);
     mEarthDamageSystem.clear();
     mEarthBreakupSystem.reset();
+    mScene.findObject("Earth")->visible = true;
+    mScene.findObject("EarthClouds")->visible = true;
+    mScene.findObject("Earth")->material.setFloat("destructionLevel", 0);
     mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
     mTimeline.play();
     mDebugTimer = 0;

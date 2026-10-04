@@ -699,10 +699,12 @@ int main()
         MeteorShower shower(meteors);
         assert(meteors.initGraphics());
         assert(MainSequence::build(timeline, camera, scene, shower));
-        const int frames[] = {0, 60, 80, 88, 108, 120};
+        const int frames[] = {0, 96, 160, 192, 208, 224, 264, 360};
+        constexpr int imageCount = sizeof(frames)/sizeof(frames[0]);
         const char* images[] = {"/tmp/space-start.ppm", "/tmp/space-middle.ppm",
-            "/tmp/space-shower-stop.ppm", "/tmp/space-after-shower.ppm",
-            "/tmp/space-meteors-expired.ppm", "/tmp/space-end.ppm"};
+            "/tmp/space-bombardment.ppm", "/tmp/space-cracks.ppm",
+            "/tmp/space-breakup.ppm", "/tmp/space-core.ppm",
+            "/tmp/space-fragments.ppm", "/tmp/space-end.ppm"};
         std::vector<std::vector<unsigned char>> firstPass;
         std::vector<std::vector<MeteorImpact>> firstImpacts;
         std::vector<std::vector<ImpactLight>> firstLights;
@@ -721,13 +723,14 @@ int main()
             int imageIndex = 0;
             std::size_t impactCount = 0;
             float previousDestruction = 0;
-            for (int frame = 0; frame <= 120; ++frame)
+            for (int frame = 0; frame <= 360; ++frame)
             {
                 if (frame > 0)
                 {
                     timeline.update(0.25f);
                     trails.observe(meteors.meteors());
-                    meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
+                    if (breakup.active()) meteors.update(0.25f);
+                    else meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
                     particles.update(0.25f);
                     trails.update(meteors.meteors(), 0.25f);
                     damage.update(0.25f);
@@ -739,6 +742,7 @@ int main()
                     flashes.update(0.25f);
                     flashes.publish(lights);
                     breakup.publish(lights);
+                    if (breakup.active()) shower.stop();
                     shower.update(0.25f);
                 }
                 assert(damage.destructionLevel() >= previousDestruction && damage.destructionLevel() <= 1);
@@ -751,7 +755,7 @@ int main()
                     assert(std::abs(glm::length(impact.position - collider.center) - collider.radius) < 0.0001f);
                     assert(std::abs(glm::length(impact.normal) - 1) < 0.0001f);
                 }
-                for (const auto& meteor : meteors.meteors())
+                if (!breakup.active()) for (const auto& meteor : meteors.meteors())
                     assert(glm::distance(meteor.transform.position, collider.center)
                         >= collider.radius + meteor.transform.scale.x - 0.0001f);
                 if (pass == 0) firstImpacts.push_back(meteors.impacts());
@@ -790,12 +794,11 @@ int main()
                         assert(a.age == b.age && a.lifetime == b.lifetime);
                     }
                 }
-                if (frame < 40) assert(meteors.size() == 0 && !shower.isRunning());
-                if (frame == 60) assert(meteors.size() > 0 && shower.isRunning());
-                if (frame == 80 || frame == 88)
-                    assert(meteors.size() > 0 && !shower.isRunning());
-                if (frame >= 108) assert(meteors.size() == 0 && !shower.isRunning());
-                if (imageIndex >= 6 || frame != frames[imageIndex]) continue;
+                if (frame < 32) assert(meteors.size() == 0 && !shower.isRunning());
+                if (frame == 96) assert(meteors.size() > 0 && shower.isRunning());
+                if (frame >= 248) assert(!shower.isRunning());
+                if (frame == 360) assert(meteors.size() == 0 && breakup.active());
+                if (imageIndex >= imageCount || frame != frames[imageIndex]) continue;
                 SceneSetup::update(scene, camera.getPosition());
                 assert(scene.findObject("Stars")->transform.position == camera.getPosition());
                 assert(hdr.begin(640,480));
@@ -809,8 +812,8 @@ int main()
                 const auto withoutMeteors = pixels();
                 meteors.render(renderer, lights, view, projection, camera.getPosition());
                 const auto rendered = pixels();
-                if (meteors.size() > 0) assert(rendered != withoutMeteors);
-                else assert(rendered == withoutMeteors);
+                if (meteors.size() == 0) assert(rendered == withoutMeteors);
+                // Meteors can exist outside the camera: offscreen births are intentional.
                 breakup.render(renderer,scene.findObject("Earth")->material,lights,view,projection,camera.getPosition());
                 particles.render(view, projection);
                 hdr.finish();
@@ -823,7 +826,7 @@ int main()
                 else assert(withParticles == firstPass[imageIndex]); // Actual image replay.
                 ++imageIndex;
             }
-            assert(imageIndex == 6 && !timeline.isPlaying() && timeline.getTime() == 30);
+            assert(imageIndex == imageCount && !timeline.isPlaying() && timeline.getTime() == MainSequence::Duration);
             assert(impactCount > 0 && damage.destructionLevel() > 0 && breakup.active());
         }
         breakup.reset(); scene.findObject("Earth")->visible=true; scene.findObject("EarthClouds")->visible=true;

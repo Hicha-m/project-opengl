@@ -35,7 +35,9 @@ bool MeteorShower::configure(const MeteorShowerConfig& config)
         || config.spreadRadians > glm::pi<float>()
         || !range(config.minSpeed, config.maxSpeed, true)
         || !range(config.minScale, config.maxScale)
-        || !range(config.minLifetime, config.maxLifetime))
+        || !range(config.minLifetime, config.maxLifetime)
+        || !finite(config.target) || !std::isfinite(config.targetRadius) || config.targetRadius < 0
+        || (config.aimed && glm::length(glm::max(glm::abs(glm::dvec3(config.target)-glm::dvec3(config.origin))-glm::dvec3(extents),glm::dvec3(0))) <= config.targetRadius))
         return false;
     // Reject boxes whose endpoints overflow the float positions used by MeteorSystem.
     if (!finite(config.origin - extents) || !finite(config.origin + extents)) return false;
@@ -52,9 +54,17 @@ bool MeteorShower::configure(const MeteorShowerConfig& config)
 
 void MeteorShower::reset()
 {
+    mRate = mConfig.spawnRate; mMinScale = mConfig.minScale; mMaxScale = mConfig.maxScale;
     mRandom.seed(mConfig.seed);
     mSpawnCredit = 0;
     mRunning = false;
+}
+
+bool MeteorShower::setEmission(float rate, float minScale, float maxScale)
+{
+    if (!std::isfinite(rate) || rate < 0 || !range(minScale,maxScale)) return false;
+    mRate=rate; mMinScale=minScale; mMaxScale=maxScale;
+    return true;
 }
 
 float MeteorShower::random(float minimum, float maximum)
@@ -71,13 +81,23 @@ void MeteorShower::emit()
     for (int component = 0; component < 3; ++component)
         transform.position[component] = mConfig.origin[component]
             + random(-extents[component], extents[component]);
-    transform.scale = glm::vec3(random(mConfig.minScale, mConfig.maxScale));
+    transform.scale = glm::vec3(random(mMinScale, mMaxScale));
     // Uniform solid-angle sampling inside a cone around the general direction.
     const float cosine = random(std::cos(mConfig.spreadRadians), 1.0f);
     const float sine = std::sqrt(std::max(0.0f, 1.0f - cosine * cosine));
     const float azimuth = random(0, glm::two_pi<float>());
-    const glm::vec3 direction = glm::normalize(mDirection * cosine
+    glm::vec3 direction = glm::normalize(mDirection * cosine
         + (mTangent * std::cos(azimuth) + mBitangent * std::sin(azimuth)) * sine);
+    if (mConfig.aimed) {
+        const auto incoming = glm::normalize(mConfig.target-transform.position);
+        const auto helper = std::abs(incoming.y) < 0.9f ? glm::vec3(0,1,0) : glm::vec3(1,0,0);
+        const auto tangent = glm::normalize(glm::cross(incoming,helper));
+        const auto bitangent = glm::cross(incoming,tangent);
+        const float radius = std::sqrt(random(0,1))*mConfig.targetRadius;
+        const float angle = random(0,glm::two_pi<float>());
+        const auto aim = mConfig.target + radius*(tangent*std::cos(angle)+bitangent*std::sin(angle));
+        direction = glm::normalize(aim-transform.position);
+    }
     const float speed = random(mConfig.minSpeed, mConfig.maxSpeed);
     const float lifetime = random(mConfig.minLifetime, mConfig.maxLifetime);
     mSystem.spawn(transform, direction * speed, lifetime);
@@ -86,7 +106,7 @@ void MeteorShower::emit()
 void MeteorShower::update(float deltaTime)
 {
     if (!mRunning || !std::isfinite(deltaTime) || deltaTime <= 0) return;
-    mSpawnCredit += double(deltaTime) * mConfig.spawnRate;
+    mSpawnCredit += double(deltaTime) * mRate;
     while (mSpawnCredit >= 1.0)
     {
         emit();

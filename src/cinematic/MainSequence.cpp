@@ -8,17 +8,20 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
     auto* earth = scene.findObject("Earth");
     if (!earth || !scene.findObject("EarthClouds")) return false;
     MeteorShowerConfig config;
-    config.spawnRate = 30;
-    config.origin = earth->transform.position + glm::vec3(0, 17, 0);
-    config.spawnHalfExtents = {17, 3, 17};
-    config.direction = {0.15f, -1, 0.1f};
-    config.spreadRadians = glm::radians(12.0f);
-    config.minSpeed = 3;
-    config.maxSpeed = 5;
-    config.minScale = 0.4f;
-    config.maxScale = 0.9f;
-    config.minLifetime = 4;
-    config.maxLifetime = 7;
+    config.spawnRate = 0.5f;
+    // Far above every authored shot: meteors travel into the image, never spawn in it.
+    config.origin = earth->transform.position + glm::vec3(0, 160, 0);
+    config.spawnHalfExtents = {110, 10, 110};
+    config.direction = {0, -1, 0};
+    config.aimed = true;
+    config.target = earth->transform.position;
+    config.targetRadius = 8.5f;
+    config.minSpeed = 12;
+    config.maxSpeed = 18;
+    config.minScale = 0.15f;
+    config.maxScale = 0.35f;
+    config.minLifetime = 30;
+    config.maxLifetime = 34;
     config.seed = 42;
     if (!shower.configure(config)) return false;
     // A fresh sequence also supports Application shutdown/init on the same instance.
@@ -31,21 +34,30 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
     camera.orbitPitchTrack() = {};
     camera.enableOrbit(true);
     camera.orbitTargetTrack().addKeyframe(0, earth->transform.position);
-    camera.orbitTargetTrack().addKeyframe(30, earth->transform.position);
+    camera.orbitTargetTrack().addKeyframe(Duration, earth->transform.position);
     auto easing = EasingType::EaseInOut;
-    camera.orbitRadiusTrack().addKeyframe(0, 30, easing);
-    camera.orbitRadiusTrack().addKeyframe(10, 40, easing);
-    camera.orbitRadiusTrack().addKeyframe(20, 100, easing);
-    camera.orbitRadiusTrack().addKeyframe(30, 300, easing);
-    camera.orbitYawTrack().addKeyframe(0, 0, easing);
-    camera.orbitYawTrack().addKeyframe(30, 180, easing);
-    camera.orbitPitchTrack().addKeyframe(0, 10, easing);
-    camera.orbitPitchTrack().addKeyframe(30, 25, easing);
+    camera.orbitRadiusTrack().addKeyframe(0, 34, easing);
+    camera.orbitRadiusTrack().addKeyframe(8, 36, easing);
+    camera.orbitRadiusTrack().addKeyframe(24, 42, easing);
+    camera.orbitRadiusTrack().addKeyframe(40, 50, easing);
+    camera.orbitRadiusTrack().addKeyframe(52, 65, easing);
+    camera.orbitRadiusTrack().addKeyframe(62, 110, easing);
+    camera.orbitRadiusTrack().addKeyframe(78, 210, easing);
+    camera.orbitRadiusTrack().addKeyframe(Duration, 240, easing);
+    camera.orbitYawTrack().addKeyframe(0, 15, easing);
+    camera.orbitYawTrack().addKeyframe(24, 40, easing);
+    camera.orbitYawTrack().addKeyframe(52, 80, easing);
+    camera.orbitYawTrack().addKeyframe(78, 105, easing);
+    camera.orbitYawTrack().addKeyframe(Duration, 110, easing);
+    camera.orbitPitchTrack().addKeyframe(0, 8, easing);
+    camera.orbitPitchTrack().addKeyframe(52, 10, easing);
+    camera.orbitPitchTrack().addKeyframe(Duration, 6, easing);
     camera.fovTrack().addKeyframe(0, 45, easing);
-    camera.fovTrack().addKeyframe(15, 55, easing);
-    camera.fovTrack().addKeyframe(30, 65, easing);
+    camera.fovTrack().addKeyframe(40, 48, easing);
+    camera.fovTrack().addKeyframe(62, 52, easing);
+    camera.fovTrack().addKeyframe(Duration, 45, easing);
 
-    timeline.setDuration(30.0f);
+    timeline.setDuration(Duration);
 
     timeline.addTrack(std::make_unique<CameraTrack>(camera));
 
@@ -57,15 +69,18 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
             return object ? &object->transform : nullptr;
         });
         track->rotationTrack().addKeyframe(0, glm::vec3(0));
-        track->rotationTrack().addKeyframe(30, glm::vec3(0, glm::radians(30 * degreesPerSecond), 0));
+        track->rotationTrack().addKeyframe(Duration, glm::vec3(0, glm::radians(Duration * degreesPerSecond), 0));
         timeline.addTrack(std::move(track));
     };
-    animateRotation("Earth", 100.0f);
-    animateRotation("EarthClouds", 5.0f);
+    animateRotation("Earth", 2.0f);
+    animateRotation("EarthClouds", 2.3f);
 
     auto events = std::make_unique<EventTrack>();
-    events->addEvent(10, [&shower] { shower.start(); });
-    events->addEvent(20, [&shower] { shower.stop(); });
+    events->addEvent(BombardmentStart, [&shower] { shower.start(); });
+    events->addEvent(24, [&shower] { shower.setEmission(2.0f,0.18f,0.5f); });
+    events->addEvent(40, [&shower] { shower.setEmission(5.0f,0.22f,0.75f); });
+    events->addEvent(48, [&shower] { shower.setEmission(9.0f,0.25f,1.1f); });
+    events->addEvent(BombardmentEnd, [&shower] { shower.stop(); });
     timeline.addTrack(std::move(events));
 
     timeline.play();

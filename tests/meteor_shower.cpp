@@ -186,5 +186,26 @@ int main()
     shower.start();
     shower.update(1);
     assert(system.meteors().back().velocity == glm::vec3(0));
+    // Intensity changes preserve credit and RNG; reset restores authored defaults.
+    system.clear(); assert(shower.configure(config)); shower.start(); shower.update(0.05f);
+    assert(shower.setEmission(20,0.8f,1.2f)); shower.update(0.025f);
+    assert(system.size()==1 && system.meteors()[0].transform.scale.x>=0.8f);
+    assert(!shower.setEmission(-1,0.8f,1.2f) && !shower.setEmission(1,2,1));
+    shower.reset(); system.clear(); shower.start(); shower.update(0.1f);
+    assert(system.size()==1 && system.meteors()[0].transform.scale.x<=config.maxScale);
+    MeteorShowerConfig aimed=config; aimed.aimed=true; aimed.origin={0,80,0};
+    aimed.spawnHalfExtents={40,5,40}; aimed.target={0,0,0}; aimed.targetRadius=8;
+    aimed.minSpeed=10; aimed.maxSpeed=15; aimed.minLifetime=20; aimed.maxLifetime=20;
+    assert(shower.configure(aimed)); system.clear(); shower.start(); shower.update(10);
+    const auto aimedBirths=system.meteors();
+    for(const auto& meteor:aimedBirths) {
+        assert(meteor.velocity.y<0);
+        const auto d=glm::normalize(meteor.velocity);
+        const auto relative=meteor.transform.position-aimed.target;
+        assert(glm::length(relative-d*glm::dot(relative,d))<=aimed.targetRadius+0.0001f);
+    }
+    shower.reset(); system.clear(); shower.start(); shower.update(10);
+    for(std::size_t i=0;i<aimedBirths.size();++i) assert(same(aimedBirths[i],system.meteors()[i]));
+    aimed.target=aimed.origin; assert(!shower.configure(aimed)); // Reject ambiguous zero-length aim.
     std::cout << "Meteor shower cadence, configuration and determinism checks passed\n";
 }

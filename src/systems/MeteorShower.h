@@ -13,6 +13,10 @@ struct MeteorShowerConfig
     float minSpeed = 1.0f, maxSpeed = 3.0f;
     float minScale = 0.1f, maxScale = 0.3f;
     float minLifetime = 5.0f, maxLifetime = 10.0f;
+    // Optional aimed bombardment: choose a point in a disk around target.
+    bool aimed = false;
+    glm::vec3 target{0};
+    float targetRadius = 0;
     std::uint32_t seed = 42;
 };
 
@@ -27,7 +31,8 @@ public:
     // Valid configuration stops emission and resets seed/accumulator, not instances.
     // Invalid configuration leaves all generator state unchanged.
     bool configure(const MeteorShowerConfig& config);
-    void reset(); // Stop, reseed and discard fractional credit; preserve config/instances.
+    void reset(); // Restore configured emission, seed and credit; preserve instances.
+    bool setEmission(float rate, float minScale, float maxScale); // Preserve RNG/credit.
     void start() { mRunning = true; } // Idempotent; resumes fractional spawn credit.
     void stop() { mRunning = false; }
     bool isRunning() const { return mRunning; }
@@ -45,4 +50,5 @@ private:
     glm::vec3 mBitangent{0.0f, 0.0f, 1.0f};
     double mSpawnCredit = 0.0;
     bool mRunning = false;
+    float mRate = 0, mMinScale = 0, mMaxScale = 0;
 };

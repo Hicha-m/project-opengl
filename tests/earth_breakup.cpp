@@ -43,7 +43,7 @@ int main()
         assert(lights.transientPointLights().size()==2 && lights.shaderPointLights()[0].intensity==450);
     }
     breakup.reset(); assert(!breakup.active() && breakup.coreLight().intensity==0);
-    // Measure the authored shower's natural destruction progression without GL.
+    // Reference shower: physical threshold can be reached without graphics or Timeline.
     MeteorSystem meteors; MeteorShower shower(meteors); EarthDamageSystem damage;
     MeteorShowerConfig config;
     config.spawnRate=30; config.origin={0,17,0}; config.spawnHalfExtents={17,3,17};
