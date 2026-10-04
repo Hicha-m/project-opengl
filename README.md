@@ -141,6 +141,16 @@ avant de détruire la fenêtre et de terminer GLFW.
 
 ## Compilation et inclusions
 
+### Commandes
+
+- `F3` : basculer entre la caméra cinématique et la caméra FPS. La caméra FPS
+  démarre depuis la vue actuelle ; la cinématique continue pendant l'exploration.
+- En mode FPS : souris pour regarder, `W` / `S` pour avancer / reculer,
+  `A` / `D` pour aller à gauche / droite, `Z` / `X` pour monter / descendre.
+- `G` / `H` : doubler / diviser par deux la vitesse de déplacement.
+- `F1` : affichage filaire ; `F2` : informations de caméra ; `R` : relancer
+  la cinématique ; `Échap` : quitter.
+
 Toutes les inclusions internes partent de `src/`, fourni par `-Isrc` :
 
 ```cpp

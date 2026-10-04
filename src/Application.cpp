@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <sstream>
+#include <cmath>
 #include "scene/SceneSetup.h"
 #include "cinematic/MainSequence.h"
 
@@ -143,9 +144,10 @@ void Application::updateInput(float deltaTime)
     glfwGetWindowSize(mWindow, &width, &height);
     double mouseX, mouseY;
     glfwGetCursorPos(mWindow, &mouseX, &mouseY);
+    glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
+    if (!mFPSMode) return;
     mFPSCamera.rotate(static_cast<float>(width / 2.0 - mouseX) * MOUSE_SENSITIVITY,
                       static_cast<float>(height / 2.0 - mouseY) * MOUSE_SENSITIVITY);
-    glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
     const float step = mMoveSpeed * deltaTime;
     if (glfwGetKey(mWindow, GLFW_KEY_W) == GLFW_PRESS) mFPSCamera.move(step * mFPSCamera.getLook());
     else if (glfwGetKey(mWindow, GLFW_KEY_S) == GLFW_PRESS) mFPSCamera.move(-step * mFPSCamera.getLook());
@@ -159,10 +161,11 @@ void Application::render()
 {
     if (mOptions.width <= 0 || mOptions.height <= 0) return;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    const auto view = mCinematicCamera.getViewMatrix();
-    const auto projection = glm::perspective(glm::radians(mCinematicCamera.getFOV()),
+    const Camera& camera = mFPSMode ? static_cast<const Camera&>(mFPSCamera) : mCinematicCamera;
+    const auto view = camera.getViewMatrix();
+    const auto projection = glm::perspective(glm::radians(camera.getFOV()),
         static_cast<float>(mOptions.width) / mOptions.height, 0.1f, MAX_DISTANCE);
-    const auto position = mCinematicCamera.getPosition();
+    const auto position = camera.getPosition();
     SceneSetup::update(mScene, position);
     mRenderer.render(mScene, mLightManager, view, projection, position);
     mMeteorSystem.render(mRenderer, mLightManager, view, projection, position);
@@ -177,6 +180,7 @@ void Application::showFPS(double currentTime)
     std::ostringstream title;
     title.precision(3);
     title << std::fixed << APP_TITLE << "    FPS: " << fps << "    Frame Time: " << 1000 / fps << " (ms)";
+    title << "    Camera: " << (mFPSMode ? "FPS" : "Cinematic");
     if (mCameraDebug)
     {
         auto position = mFPSCamera.getPosition();
@@ -210,6 +214,21 @@ void Application::onKey(int key, int action)
     if (key == GLFW_KEY_G) mMoveSpeed *= 2;
     if (key == GLFW_KEY_H) mMoveSpeed /= 2;
     if (key == GLFW_KEY_F2) mCameraDebug = !mCameraDebug;
+    if (key == GLFW_KEY_F3)
+    {
+        mFPSMode = !mFPSMode;
+        if (mFPSMode)
+        {
+            const auto& look = mCinematicCamera.getLook();
+            mFPSCamera.setPosition(mCinematicCamera.getPosition());
+            mFPSCamera.rotate(glm::degrees(std::atan2(look.x, look.z)) - mFPSCamera.getYaw(),
+                glm::degrees(std::asin(glm::clamp(look.y, -1.0f, 1.0f))) - mFPSCamera.getPitch());
+            mFPSCamera.setFOV(mCinematicCamera.getFOV());
+        }
+        int width, height;
+        glfwGetWindowSize(mWindow, &width, &height);
+        glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
+    }
     if (key == GLFW_KEY_R) restartSequence();
 }
 
@@ -244,6 +263,7 @@ void Application::shutdown()
     mGLFWInitialized = false;
     mInitialized = false;
     mWireframe = false;
+    mFPSMode = false;
     mFrameCount = 0;
     mDebugTimer = 0;
 }

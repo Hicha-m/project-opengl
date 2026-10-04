@@ -51,6 +51,7 @@ private:
     bool mInitialized = false;
     bool mWireframe = false;
     bool mCameraDebug = false;
+    bool mFPSMode = false;
     float mMoveSpeed = 5.0f;
     double mFPSStart = 0;
     unsigned mFrameCount = 0;
