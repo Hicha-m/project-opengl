@@ -2,12 +2,16 @@
 #include "graphics/ShaderProgram.h"
 #include "graphics/Texture2D.h"
 #include "geometry/Sphere.h"
+#include <array>
 
 // Construct only with a current OpenGL context. Destroy before closing it.
 // Scene materials and meshes borrow these resources; do not copy or move them.
 struct SceneResources
 {
-    ShaderProgram earthShader, cloudShader, sunShader, starShader;
+    ShaderProgram earthShader, cloudShader, sunShader, starShader, planetShader, ringShader, orbitShader;
+    std::array<Texture2D,7> planetTextures;
+    Texture2D moonTexture, saturnRingTexture, milkyWayTexture, galaxyTexture;
+    Mesh orbitMesh, ringMesh;
     Texture2D earthDayTexture, earthNightTexture, earthSpecularTexture;
     Texture2D earthDamageTexture, earthHeatTexture;
     Texture2D earthNormalTexture, earthCloudsTexture, sunTexture, starTexture;

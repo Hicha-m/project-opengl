@@ -35,7 +35,7 @@ int main()
         assert(std::abs(glm::distance(camera.getPosition(),earth.transform.position)-34)<0.001f);
         timeline.play(); MeteorId lastId=0; std::size_t impacts=0, births=0, coreContacts=0;
         float minScale=10,maxScale=0,minX=100,maxX=-100,breakTime=0;
-        for(int frame=0;frame<360;++frame) {
+        for(int frame=0;frame<int(MainSequence::Duration*4);++frame) {
             timeline.update(0.25f);
             const bool hittingCore=breakup.active();
             if(hittingCore) system.update(0.25f,breakup.coreCollider()); else system.update(0.25f,collider);

@@ -40,7 +40,7 @@ bool Application::init()
         || !mHDR->init(mOptions.width,mOptions.height)
         || !mMeteorSystem.initGraphics()
         || !mParticleSystem.initGraphics()
-        || !MainSequence::build(mTimeline, mCinematicCamera, mScene, mMeteorShower))
+        || !MainSequence::build(mTimeline, mCinematicCamera, mScene, mMeteorShower, &mSolarSystem, &mEarthBreakupSystem))
     {
         std::cerr << "Scene initialization failed\n";
         shutdown();
@@ -129,6 +129,9 @@ void Application::update(float deltaTime)
     // Events affect this frame. Existing instances move first; births happen at
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
+    auto sunlight=mLightManager.getDirectionalLight();
+    sunlight.direction=glm::normalize(mScene.findObject("Earth")->transform.position-SolarSystem::SunCenter);
+    mLightManager.setDirectionalLight(sunlight);
     mMeteorTrailEmitter.observe(mMeteorSystem.meteors());
     const bool hittingCore = mEarthBreakupSystem.active();
     if (hittingCore) mMeteorSystem.update(deltaTime, mEarthBreakupSystem.coreCollider());
@@ -277,10 +280,15 @@ void Application::restartSequence()
     mImpactLightSystem.publish(mLightManager);
     mEarthDamageSystem.clear();
     mEarthBreakupSystem.reset();
+    mSolarSystem.reset(mScene);
     mScene.findObject("Earth")->visible = true;
     mScene.findObject("EarthClouds")->visible = true;
     mScene.findObject("Earth")->material.setFloat("destructionLevel", 0);
     mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
+    auto sunlight=mLightManager.getDirectionalLight();
+    sunlight.direction=glm::normalize(mScene.findObject("Earth")->transform.position-SolarSystem::SunCenter);
+    mLightManager.setDirectionalLight(sunlight);
+    SceneSetup::update(mScene,mCinematicCamera.getPosition());
     mTimeline.play();
     mDebugTimer = 0;
 }
@@ -302,6 +310,7 @@ void Application::shutdown()
     mParticleSystem.clear();
     mImpactParticleEmitter.reset();
     mMeteorTrailEmitter.reset();
+    mSolarSystem.reset(mScene);
     mEarthBreakupSystem.releaseGraphics();
     mHDR.reset();
     mMeteorSystem.releaseGraphics();

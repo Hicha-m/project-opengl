@@ -54,10 +54,18 @@ bool MeteorShower::configure(const MeteorShowerConfig& config)
 
 void MeteorShower::reset()
 {
+    mOrigin=mConfig.origin; mTarget=mConfig.target;
     mRate = mConfig.spawnRate; mMinScale = mConfig.minScale; mMaxScale = mConfig.maxScale;
     mRandom.seed(mConfig.seed);
     mSpawnCredit = 0;
     mRunning = false;
+}
+
+bool MeteorShower::followTarget(const glm::vec3& target)
+{
+    const auto origin=mOrigin+(target-mTarget);
+    if(!finite(target) || !finite(origin-mConfig.spawnHalfExtents) || !finite(origin+mConfig.spawnHalfExtents)) return false;
+    mOrigin=origin; mTarget=target; return true;
 }
 
 bool MeteorShower::setEmission(float rate, float minScale, float maxScale)
@@ -79,7 +87,7 @@ void MeteorShower::emit()
     Transform transform;
     const auto& extents = mConfig.spawnHalfExtents;
     for (int component = 0; component < 3; ++component)
-        transform.position[component] = mConfig.origin[component]
+        transform.position[component] = mOrigin[component]
             + random(-extents[component], extents[component]);
     transform.scale = glm::vec3(random(mMinScale, mMaxScale));
     // Uniform solid-angle sampling inside a cone around the general direction.
@@ -89,13 +97,13 @@ void MeteorShower::emit()
     glm::vec3 direction = glm::normalize(mDirection * cosine
         + (mTangent * std::cos(azimuth) + mBitangent * std::sin(azimuth)) * sine);
     if (mConfig.aimed) {
-        const auto incoming = glm::normalize(mConfig.target-transform.position);
+        const auto incoming = glm::normalize(mTarget-transform.position);
         const auto helper = std::abs(incoming.y) < 0.9f ? glm::vec3(0,1,0) : glm::vec3(1,0,0);
         const auto tangent = glm::normalize(glm::cross(incoming,helper));
         const auto bitangent = glm::cross(incoming,tangent);
         const float radius = std::sqrt(random(0,1))*mConfig.targetRadius;
         const float angle = random(0,glm::two_pi<float>());
-        const auto aim = mConfig.target + radius*(tangent*std::cos(angle)+bitangent*std::sin(angle));
+        const auto aim = mTarget + radius*(tangent*std::cos(angle)+bitangent*std::sin(angle));
         direction = glm::normalize(aim-transform.position);
     }
     const float speed = random(mConfig.minSpeed, mConfig.maxSpeed);

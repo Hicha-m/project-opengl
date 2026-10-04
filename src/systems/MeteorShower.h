@@ -32,6 +32,7 @@ public:
     // Invalid configuration leaves all generator state unchanged.
     bool configure(const MeteorShowerConfig& config);
     void reset(); // Restore configured emission, seed and credit; preserve instances.
+    bool followTarget(const glm::vec3& target); // Translate the spawn zone; preserve RNG/credit.
     bool setEmission(float rate, float minScale, float maxScale); // Preserve RNG/credit.
     void start() { mRunning = true; } // Idempotent; resumes fractional spawn credit.
     void stop() { mRunning = false; }
@@ -50,5 +51,6 @@ private:
     glm::vec3 mBitangent{0.0f, 0.0f, 1.0f};
     double mSpawnCredit = 0.0;
     bool mRunning = false;
+    glm::vec3 mOrigin{0}, mTarget{0};
     float mRate = 0, mMinScale = 0, mMaxScale = 0;
 };

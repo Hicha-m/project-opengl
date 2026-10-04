@@ -42,6 +42,7 @@ projet/
 │   ├── systems/
 │   │   ├── Meteor.h / MeteorImpact.h
 │   │   ├── MeteorSystem.h / MeteorSystem.cpp
+│   │   ├── SolarSystem.h / SolarSystem.cpp
 │   │   ├── MeteorResources.h / MeteorResources.cpp
 │   │   ├── ImpactLight.h
 │   │   ├── ImpactLightSystem.h / ImpactLightSystem.cpp
@@ -56,8 +57,9 @@ projet/
 │   └── cinematic/
 │       └── MainSequence.h / MainSequence.cpp
 ├── shaders/                  # programmes GLSL exécutés par le GPU
-├── textures/                 # images de la Terre, du Soleil et de l'espace
+├── textures/                 # images des planètes, de la Lune, du Soleil et de l'espace
 ├── tests/
+│   ├── solar_system.cpp
 │   ├── timeline.cpp
 │   ├── main_sequence.cpp
 │   ├── meteor_system.cpp
@@ -106,7 +108,9 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `animation/CameraTrack.h` | Relie la Timeline à `CinematicCamera` pour évaluer la caméra au temps courant. |
 | `animation/TransformTrack.h` | Anime position, rotation et échelle d'une transformation. Un résolveur permet de retrouver un objet même après réallocation du vecteur de scène. |
 | `animation/EventTrack.h` | Déclenche des callbacks aux instants prévus, une fois par passage, même si une frame traverse plusieurs événements. |
-| `cinematic/MainSequence` | Décrit le film de 90 secondes : caméra, rotations lentes, vagues de bombardement croissantes, plan final et reset. |
+| `cinematic/MainSequence` | Décrit le film de 130 secondes : suivi de la Terre, bombardement, rupture, plan final puis recul sur le système solaire et la Voie lactée. |
+| `systems/SolarSystem` | Orbites circulaires comprimées des huit planètes, suivi des nuages et anneaux, orbite lunaire puis dérive à vitesse conservée après rupture. Aucun solveur gravitationnel. |
+| `tests/solar_system.cpp` | Vérifie les rayons et vitesses orbitales, la dérive tangentielle de la Lune, la pose capturée de la Terre et le reset déterministe. |
 | `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire, durée de vie restante et MeteorId stable. |
 | `systems/MeteorSystem` | Possède la population, simule les instances, détecte les contacts continus et expose les impacts de frame. Dessine avec les ressources communes, sans SceneObject par météore. |
 | `systems/MeteorResources` | Possède une sphère peu détaillée, un shader, la texture lunaire réutilisée et un seul matériau pour toute la population. |
@@ -424,7 +428,8 @@ captures de comparaison sont `/tmp/earth-color-legacy.ppm`,
 
 ## Séquence finale — phase 4.9
 
-`MainSequence` assemble un film de **90 secondes** avec les systèmes existants.
+`MainSequence` assemble un film de **130 secondes**, dont les 90 premières
+conservent le plan de destruction avant le recul sur le système solaire.
 La Terre et les nuages tournent lentement (2 et 2,3 degrés/s), pour laisser
 lire les impacts attachés à la surface. La caméra garde la Terre au centre,
 orbite doucement puis recule pour suivre l'expansion des morceaux.
@@ -437,6 +442,8 @@ orbite doucement puis recule pour suivre l'expansion des morceaux.
 | 40–48 s | Vague à 5/s, échelles 0,22–0,75 ; montée du niveau de destruction et fissures. |
 | 48–62 s | Vague maximale à 9/s, échelles 0,25–1,1 si la Terre est encore intacte. |
 | Après la rupture–90 s | Arrêt des naissances, recul de caméra, fragments autour du noyau blanc et bloom. |
+| 90–110 s | Recentrage sur le Soleil, recul jusqu’à 1 800 unités, révélation des planètes et orbites. |
+| 110–130 s | Recul jusqu’à 3 200 unités et transition du fond vers la Voie lactée. |
 
 La zone d'émission est centrée 160 unités au-dessus de la Terre, avec
 110 unités d'étendue horizontale et 10 en hauteur. Les météores naissent
@@ -451,7 +458,9 @@ ni perdre le crédit d'émission ; `reset` restaure les valeurs initiales.
 Les dégâts, la chaleur et les fissures restent calculés par leurs systèmes.
 La rupture reste déclenchée par le seuil de destruction, sans forcer un
 instant d'explosion dans la Timeline. Au stepping de 0,25 s testé, elle
-survient à **52 s après 43 impacts**, laissant **38 s de plan final**.
+survient autour de **52 s**, laissant environ **38 s de plan sur les fragments**
+avant le recul solaire. La Terre se déplace désormais sur son orbite ;
+la caméra et la zone de naissance suivent sa position.
 Le noyau publie alors sa lumière et son émission HDR alimente le bloom
 existant. Après rupture, `Application` arrête la pluie et simule les météores
 restants avec le collider du noyau (rayon local 0,55), jusqu'à leur contact
@@ -470,13 +479,64 @@ le niveau de destruction et la rupture ; la Terre et ses nuages redeviennent
 visibles immédiatement. Les tests vérifient les naissances hors champ, les
 angles et tailles variés, la progression jusqu'à la rupture et l'égalité
 exacte de deux replays avec le même stepping. Les tests OpenGL comparent
-également huit images sur les 90 secondes, les cartes, les impacts, les
+également dix images sur les 130 secondes, les cartes, les impacts, les
 particules et les lumières. Captures : `/tmp/space-start.ppm`, `/tmp/space-middle.ppm`,
 `/tmp/space-bombardment.ppm`, `/tmp/space-cracks.ppm`,
 `/tmp/space-breakup.ppm`, `/tmp/space-core.ppm`,
-`/tmp/space-fragments.ppm` et `/tmp/space-end.ppm`.
+`/tmp/space-fragments.ppm`, `/tmp/space-aftermath.ppm`,
+`/tmp/solar-system.ppm` et `/tmp/milky-way.ppm`.
 Le temps de rupture peut légèrement varier avec
 un autre stepping ; tous les resets à stepping identique rejouent le même film.
+
+## Système solaire, Lune et Voie lactée
+
+Les huit planètes utilisent les textures existantes et une sphère partagée.
+Le Soleil reste émissif. Les nouvelles planètes et la Lune utilisent un
+éclairage dirigé vers la position du Soleil ; la Terre conserve son matériau,
+ses cartes de dégâts et sa lumière directionnelle actualisée. Saturne possède
+un anneau transparent texturé et incliné. Les guides orbitaux réutilisent un
+mesh annulaire commun, avec une opacité qui augmente lors du recul.
+
+Les tailles et distances sont comprimées pour rester lisibles :
+
+| Corps | Rayon visible | Rayon orbital autour du Soleil |
+| --- | ---: | ---: |
+| Soleil | 50 | — |
+| Mercure | 3,8 | 120 |
+| Vénus | 9,5 | 220 |
+| Terre | 10 | 320 |
+| Mars | 5,3 | 440 |
+| Jupiter | 28 | 600 |
+| Saturne | 23 | 760 |
+| Uranus | 17 | 920 |
+| Neptune | 16,5 | 1 080 |
+| Lune | 2,7 | 28 autour de la Terre |
+
+Les orbites de `SolarSystem` sont analytiques et déterministes : les planètes
+intérieures se déplacent plus vite que les extérieures. La Terre démarre à
+sa position historique `(30,50,0)` ; le Soleil est placé à `(-290,50,0)`.
+Une piste de la Timeline met à jour les poses avant la caméra et les naissances.
+Après la rupture, la position terrestre reste capturée pour le noyau et les
+fragments ; les autres planètes poursuivent leur orbite. La Lune perd son
+orbite terrestre et conserve sa vitesse tangentielle, plus la vitesse
+orbitale de la Terre. Elle dérive alors en ligne droite, sans simulation de
+la gravitation solaire ou des collisions de débris. Son guide orbital et
+celui de la Terre disparaissent. `R` restaure toutes les poses et l'orbite lunaire.
+
+Le fond fait une transition selon la distance au Soleil, y compris en mode
+FPS : `2k_stars.jpg` vers `2k_stars_milky_way.jpg` entre 600 et 1 400 unités,
+puis vers `2k_milky_way.jpg` entre 1 600 et 3 000 unités. Le premier fond
+n'est plus visible après la transition. La texture de galaxie carrée est
+projetée dans une direction fixe du ciel, plutôt qu'étirée sur les UV de la
+sphère ; elle ne suit donc pas la rotation de la caméra. Le ciel est rendu
+avant les éléments transparents pour laisser visibles anneaux et orbites.
+
+Les tests CPU vérifient les orbites, la libération de la Lune et le replay.
+Les tests OpenGL vérifient les anneaux et remplacent temporairement la
+texture du fond étoilé pour prouver qu'elle ne contribue plus au plan éloigné.
+Ils comparent les dix images de deux replays complets, dont les plans solaires.
+Captures supplémentaires : `/tmp/saturn-rings.ppm`, `/tmp/solar-system.ppm`
+et `/tmp/milky-way.ppm`.
 
 Pour changer un mouvement ou un événement, modifier `MainSequence`. Pour changer
 les objets, leurs textures ou leurs matériaux, modifier `SceneSetup` et, si

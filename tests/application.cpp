@@ -602,6 +602,49 @@ static void checkHDRColorAndSun()
     assert(glGetError()==GL_NO_ERROR);
 }
 
+static void checkSolarViews()
+{
+    SceneResources resources; Scene scene; LightManager lights; Renderer renderer;
+    assert(SceneSetup::build(scene,lights,resources));
+    HDRPipeline hdr; assert(hdr.init(640,480));
+    SolarSystem solar; solar.reset(scene);
+    auto* saturn=scene.findObject("Saturn"); auto* rings=scene.findObject("SaturnRings");
+    const auto eye=saturn->transform.position+glm::vec3(0,60,100);
+    const auto view=glm::lookAt(eye,saturn->transform.position,glm::vec3(0,1,0));
+    const auto projection=glm::ortho(-80.0f,80.0f,-60.0f,60.0f,0.1f,300.0f);
+    auto drawSaturn=[&](bool ring) {
+        assert(hdr.begin(640,480));
+        renderer.renderMesh(*saturn->mesh,saturn->material,saturn->transform,lights,view,projection,eye);
+        if(ring) renderer.renderMesh(*rings->mesh,rings->material,rings->transform,lights,view,projection,eye);
+        hdr.finish(); return pixels();
+    };
+    const auto noRings=drawSaturn(false); const auto withRings=drawSaturn(true);
+    assert(noRings!=withRings); capture("/tmp/saturn-rings.ppm",640,480);
+    auto* sky=scene.findObject("Stars");
+    const auto axis=glm::normalize(glm::vec3(-0.287f,-0.819f,0.497f));
+    auto skyDraw=[&](float distance) {
+        const auto camera=SolarSystem::SunCenter-axis*distance;
+        SceneSetup::update(scene,camera);
+        assert(hdr.begin(640,480));
+        renderer.renderMesh(*sky->mesh,sky->material,sky->transform,lights,
+            glm::lookAt(camera,SolarSystem::SunCenter,glm::vec3(0,1,0)),
+            glm::perspective(glm::radians(45.0f),640.0f/480,0.1f,10000.0f),camera);
+        hdr.finish(); return pixels();
+    };
+    const auto near=skyDraw(300);
+    assert(sky->material.floatUniforms.at("milkyWayBlend")==0 && sky->material.floatUniforms.at("galaxyBlend")==0);
+    const auto far=skyDraw(3200);
+    assert(sky->material.floatUniforms.at("milkyWayBlend")==1 && sky->material.floatUniforms.at("galaxyBlend")==1);
+    assert(near!=far);
+    auto* originalStars=sky->material.textures.at("starMap").texture;
+    sky->material.textures.at("starMap").texture=&resources.earthDayTexture;
+    assert(skyDraw(3200)==far); // The original stars are completely replaced at large distance.
+    sky->material.textures.at("starMap").texture=originalStars;
+    skyDraw(1000);
+    assert(sky->material.floatUniforms.at("milkyWayBlend")>0 && sky->material.floatUniforms.at("milkyWayBlend")<1);
+    assert(glGetError()==GL_NO_ERROR);
+}
+
 int main()
 {
     ApplicationOptions options;
@@ -624,6 +667,7 @@ int main()
     checkEarthCracks();
     checkEarthBreakup();
     checkHDRColorAndSun();
+    checkSolarViews();
     Transform meteor;
     meteor.position = {30, 50, 15};
     meteor.scale = glm::vec3(0.5f);
@@ -669,7 +713,7 @@ int main()
         CinematicCamera camera;
         Timeline timeline;
         assert(SceneSetup::build(scene, lights, resources));
-        assert(scene.getObjectCount() == 4);
+        assert(scene.getObjectCount() == 22);
         assert(scene.findObject("Earth")->mesh == &resources.earthSphere.getMesh());
         assert(scene.findObject("EarthClouds")->material.blending);
         assert(!scene.findObject("Stars")->material.depthWrite);
@@ -698,13 +742,15 @@ int main()
         assert(particles.initGraphics());
         MeteorShower shower(meteors);
         assert(meteors.initGraphics());
-        assert(MainSequence::build(timeline, camera, scene, shower));
-        const int frames[] = {0, 96, 160, 192, 208, 224, 264, 360};
+        SolarSystem solar;
+        assert(MainSequence::build(timeline, camera, scene, shower, &solar, &breakup));
+        const int frames[] = {0, 96, 160, 192, 208, 224, 264, 360, 440, 520};
         constexpr int imageCount = sizeof(frames)/sizeof(frames[0]);
         const char* images[] = {"/tmp/space-start.ppm", "/tmp/space-middle.ppm",
             "/tmp/space-bombardment.ppm", "/tmp/space-cracks.ppm",
             "/tmp/space-breakup.ppm", "/tmp/space-core.ppm",
-            "/tmp/space-fragments.ppm", "/tmp/space-end.ppm"};
+            "/tmp/space-fragments.ppm", "/tmp/space-aftermath.ppm",
+            "/tmp/solar-system.ppm", "/tmp/milky-way.ppm"};
         std::vector<std::vector<unsigned char>> firstPass;
         std::vector<std::vector<MeteorImpact>> firstImpacts;
         std::vector<std::vector<ImpactLight>> firstLights;
@@ -719,17 +765,23 @@ int main()
             damage.clear(); assert(damage.destructionLevel() == 0); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
             particles.clear(); particleEmitter.reset(); trails.reset();
             flashes.publish(lights);
+            auto initialSunlight=lights.getDirectionalLight();
+            initialSunlight.direction=glm::normalize(scene.findObject("Earth")->transform.position-SolarSystem::SunCenter);
+            lights.setDirectionalLight(initialSunlight);
             timeline.play();
             int imageIndex = 0;
             std::size_t impactCount = 0;
             float previousDestruction = 0;
             std::size_t coreContacts = 0;
-            for (int frame = 0; frame <= 360; ++frame)
+            for (int frame = 0; frame <= int(MainSequence::Duration*4); ++frame)
             {
                 const bool hittingCore = breakup.active();
                 if (frame > 0)
                 {
                     timeline.update(0.25f);
+                    auto sunlight=lights.getDirectionalLight();
+                    sunlight.direction=glm::normalize(scene.findObject("Earth")->transform.position-SolarSystem::SunCenter);
+                    lights.setDirectionalLight(sunlight);
                     trails.observe(meteors.meteors());
                     if (hittingCore) meteors.update(0.25f, breakup.coreCollider());
                     else meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
@@ -757,12 +809,12 @@ int main()
                 else impactCount += meteors.impacts().size();
                 for (const auto& impact : meteors.impacts())
                 {
-                    assert(std::abs(glm::length(impact.position - collider.center)
+                    assert(std::abs(glm::length(impact.position - scene.findObject("Earth")->transform.position)
                         - (hittingCore ? breakup.coreCollider().radius : collider.radius)) < 0.0001f);
                     assert(std::abs(glm::length(impact.normal) - 1) < 0.0001f);
                 }
                 if (!breakup.active()) for (const auto& meteor : meteors.meteors())
-                    assert(glm::distance(meteor.transform.position, collider.center)
+                    assert(glm::distance(meteor.transform.position, scene.findObject("Earth")->transform.position)
                         >= collider.radius + meteor.transform.scale.x - 0.0001f);
                 if (pass == 0) firstImpacts.push_back(meteors.impacts());
                 else
@@ -803,7 +855,7 @@ int main()
                 if (frame < 32) assert(meteors.size() == 0 && !shower.isRunning());
                 if (frame == 96) assert(meteors.size() > 0 && shower.isRunning());
                 if (frame >= 248) assert(!shower.isRunning());
-                if (frame == 360) assert(meteors.size() == 0 && breakup.active());
+                if (frame >= 360) assert(meteors.size() == 0 && breakup.active() && solar.moonReleased());
                 if (imageIndex >= imageCount || frame != frames[imageIndex]) continue;
                 SceneSetup::update(scene, camera.getPosition());
                 assert(scene.findObject("Stars")->transform.position == camera.getPosition());
@@ -831,7 +883,10 @@ int main()
                     capture(images[imageIndex], 640, 480);
                     firstPass.push_back(withParticles);
                 }
-                else assert(withParticles == firstPass[imageIndex]); // Actual image replay.
+                else {
+                    if(withParticles != firstPass[imageIndex]) std::cerr<<"Replay image mismatch at frame "<<frame<<"\n";
+                    assert(withParticles == firstPass[imageIndex]); // Actual image replay.
+                }
                 ++imageIndex;
             }
             assert(imageIndex == imageCount && !timeline.isPlaying() && timeline.getTime() == MainSequence::Duration);

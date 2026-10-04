@@ -14,6 +14,7 @@
 #include "systems/MeteorTrailEmitter.h"
 #include "systems/EarthDamageSystem.h"
 #include "systems/EarthBreakupSystem.h"
+#include "systems/SolarSystem.h"
 #include "graphics/HDRPipeline.h"
 
 struct GLFWwindow;
@@ -84,4 +85,5 @@ private:
     EarthDamageSystem mEarthDamageSystem;
     EarthBreakupSystem mEarthBreakupSystem;
     MeteorShower mMeteorShower{mMeteorSystem};
+    SolarSystem mSolarSystem;
 };
