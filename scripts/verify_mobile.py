@@ -3,6 +3,7 @@
 import argparse
 import json
 import re
+import plistlib
 import subprocess
 import time
 from pathlib import Path
@@ -68,6 +69,12 @@ def main():
         wait_for(lambda: logs().count("[MOBILE] foreground resumed") > previous_resumes and timeline(logs()) > before + 0.2, 60)
         (args.output / "android.log").write_text(logs())
     else:
+        with (args.application / "Info.plist").open("rb") as source:
+            info = plistlib.load(source)
+        print("iOS bundle metadata:", info, flush=True)
+        (args.output / "ios-bundle.json").write_text(json.dumps(info, indent=2))
+        if not info.get("CFBundleVersion") or not info.get("CFBundleIdentifier"):
+            raise RuntimeError("Missing iOS bundle version or identifier")
         devices = json.loads(run("xcrun", "simctl", "list", "devices", "available", "--json"))
         candidates = [device for runtime, group in devices["devices"].items() if "iOS" in runtime for device in group if "iPhone" in device["name"]]
         if not candidates: raise RuntimeError("No iPhone simulator available")
