@@ -27,6 +27,7 @@ public:
     // Valid configuration stops emission and resets seed/accumulator, not instances.
     // Invalid configuration leaves all generator state unchanged.
     bool configure(const MeteorShowerConfig& config);
+    void reset(); // Stop, reseed and discard fractional credit; preserve config/instances.
     void start() { mRunning = true; } // Idempotent; resumes fractional spawn credit.
     void stop() { mRunning = false; }
     bool isRunning() const { return mRunning; }

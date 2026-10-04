@@ -87,7 +87,7 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `animation/CameraTrack.h` | Relie la Timeline à `CinematicCamera` pour évaluer la caméra au temps courant. |
 | `animation/TransformTrack.h` | Anime position, rotation et échelle d'une transformation. Un résolveur permet de retrouver un objet même après réallocation du vecteur de scène. |
 | `animation/EventTrack.h` | Déclenche des callbacks aux instants prévus, une fois par passage, même si une frame traverse plusieurs événements. |
-| `cinematic/MainSequence` | Décrit le film actuel : orbite et zoom de 30 secondes, FOV, rotations Terre/nuages et événements. |
+| `cinematic/MainSequence` | Décrit le film de 30 secondes : caméra, rotations, configuration de pluie, événements start/stop à 10/20 secondes et reset de son état. |
 | `systems/Meteor.h` | Données de chaque instance vivante : transformation, vitesse linéaire et durée de vie restante. |
 | `systems/MeteorSystem` | Possède la population, expose spawn/update/clear et dessine les instances avec les ressources communes, sans créer de SceneObject. |
 | `systems/MeteorResources` | Possède une sphère peu détaillée, un shader, la texture lunaire réutilisée et un seul matériau pour toute la population. |
@@ -96,7 +96,7 @@ les templates comme `AnimationTrack<T>` sont entièrement définis dans leur `.h
 | `tests/meteor_system.cpp` | Vérifie sans OpenGL le mouvement indépendant, les expirations, les entrées invalides, clear et 1 000 instances. |
 | `tests/timeline.cpp` | Vérifie les pistes, la pause, la reprise, la fin, les événements et la relecture. |
 | `tests/main_sequence.cpp` | Vérifie les paramètres de la séquence complète et les bindings après ajout d'objets. |
-| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL de la séquence et des météores, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte onze captures dans `/tmp`. |
+| `tests/application.cpp` | Vérifie le chargement réel, le rendu OpenGL de la séquence et des météores, la fermeture, la réinitialisation et la récupération après shaders/textures absents. Exporte quatorze captures dans `/tmp`. |
 | `Makefile` | Compile et lie l'application et les tests, suit les dépendances entre headers et sources, lance l'application ou nettoie les fichiers générés. |
 | `.gitignore` | Exclut notamment l'exécutable et le dossier de compilation `build/` du suivi Git. |
 
@@ -121,7 +121,7 @@ qui calcule la couleur des fragments :
 `Application` demande à `SceneSetup` de construire le monde et à `MainSequence`
 de configurer le film. À chaque frame, elle traite les entrées, avance `Timeline`
 (qui met à jour la caméra et les transformations), avance aussi la simulation de
-`MeteorSystem`, puis demande à `Renderer`
+`MeteorSystem`, puis la génération de `MeteorShower`, et demande à `Renderer`
 de dessiner `Scene` et à `MeteorSystem` de dessiner sa population avec les mêmes
 lumières et matrices de caméra.
 

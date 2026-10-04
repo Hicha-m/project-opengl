@@ -171,6 +171,7 @@ int main()
     options.width = 640;
     options.height = 480;
     Application app(options);
+    app.restartSequence(); // Safe before initialization.
     assert(app.init());
     assert(app.init()); // Does not duplicate the scene or create another window.
     app.run(3);
@@ -184,6 +185,10 @@ int main()
     app.run(3); // Also exercise Application's simulation and render integration.
     assert(app.meteors().size() == 1);
     assert(app.meteors().meteors()[0].transform.position.x > 30);
+    app.restartSequence();
+    assert(app.meteors().size() == 0);
+    app.run(3);
+    assert(app.meteors().size() == 0);
     {
         // Exercise the extracted content independently, with the same real context.
         SceneResources resources;
@@ -198,23 +203,56 @@ int main()
         assert(scene.findObject("EarthClouds")->material.blending);
         assert(!scene.findObject("Stars")->material.depthWrite);
         assert(lights.getDirectionalLight().intensity == 1);
-        assert(MainSequence::build(timeline, camera, scene));
-        const float times[] = {0, 15, 30};
-        const char* images[] = {"/tmp/space-start.ppm", "/tmp/space-middle.ppm", "/tmp/space-end.ppm"};
-        float previous = 0;
-        for (int i = 0; i < 3; ++i)
+        MeteorSystem meteors;
+        MeteorShower shower(meteors);
+        assert(meteors.initGraphics());
+        assert(MainSequence::build(timeline, camera, scene, shower));
+        const int frames[] = {0, 60, 80, 88, 108, 120};
+        const char* images[] = {"/tmp/space-start.ppm", "/tmp/space-middle.ppm",
+            "/tmp/space-shower-stop.ppm", "/tmp/space-after-shower.ppm",
+            "/tmp/space-meteors-expired.ppm", "/tmp/space-end.ppm"};
+        std::vector<std::vector<unsigned char>> firstPass;
+        for (int pass = 0; pass < 2; ++pass)
         {
-            timeline.update(times[i] - previous);
-            previous = times[i];
-            SceneSetup::update(scene, camera.getPosition());
-            assert(scene.findObject("Stars")->transform.position == camera.getPosition());
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            renderer.render(scene, lights, camera.getViewMatrix(),
-                glm::perspective(glm::radians(camera.getFOV()), 640.0f / 480, 0.1f, 100000000.0f),
-                camera.getPosition());
-            capture(images[i], 640, 480);
+            MainSequence::reset(timeline, shower, meteors);
+            timeline.play();
+            int imageIndex = 0;
+            for (int frame = 0; frame <= 120; ++frame)
+            {
+                if (frame > 0)
+                {
+                    timeline.update(0.25f);
+                    meteors.update(0.25f);
+                    shower.update(0.25f);
+                }
+                if (frame < 40) assert(meteors.size() == 0 && !shower.isRunning());
+                if (frame == 60) assert(meteors.size() > 100 && shower.isRunning());
+                if (frame == 80 || frame == 88)
+                    assert(meteors.size() > 0 && !shower.isRunning());
+                if (frame >= 108) assert(meteors.size() == 0 && !shower.isRunning());
+                if (imageIndex >= 6 || frame != frames[imageIndex]) continue;
+                SceneSetup::update(scene, camera.getPosition());
+                assert(scene.findObject("Stars")->transform.position == camera.getPosition());
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                const auto view = camera.getViewMatrix();
+                const auto projection = glm::perspective(glm::radians(camera.getFOV()),
+                    640.0f / 480, 0.1f, 100000000.0f);
+                renderer.render(scene, lights, view, projection, camera.getPosition());
+                const auto withoutMeteors = pixels();
+                meteors.render(renderer, lights, view, projection, camera.getPosition());
+                const auto rendered = pixels();
+                if (meteors.size() > 0) assert(rendered != withoutMeteors);
+                else assert(rendered == withoutMeteors);
+                if (pass == 0)
+                {
+                    capture(images[imageIndex], 640, 480);
+                    firstPass.push_back(rendered);
+                }
+                else assert(rendered == firstPass[imageIndex]); // Actual image replay.
+                ++imageIndex;
+            }
+            assert(imageIndex == 6 && !timeline.isPlaying() && timeline.getTime() == 30);
         }
-        assert(!timeline.isPlaying());
     } // All these GPU resources are released while the context is alive.
     assert(glGetError() == GL_NO_ERROR);
     app.shutdown();
@@ -252,5 +290,5 @@ int main()
     std::filesystem::remove_all(empty);
     assert(app.init());
     app.run(3);
-    std::cout << "Application lifecycle and 30-second rendering checks passed\n";
+    std::cout << "Application lifecycle, cinematic shower and image replay checks passed\n";
 } // Application destructor also releases resources before GLFW.

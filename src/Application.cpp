@@ -35,7 +35,7 @@ bool Application::init()
     mResources = std::make_unique<SceneResources>();
     if (!SceneSetup::build(mScene, mLightManager, *mResources)
         || !mMeteorSystem.initGraphics()
-        || !MainSequence::build(mTimeline, mCinematicCamera, mScene))
+        || !MainSequence::build(mTimeline, mCinematicCamera, mScene, mMeteorShower))
     {
         std::cerr << "Scene initialization failed\n";
         shutdown();
@@ -121,8 +121,11 @@ void Application::run(std::size_t frameLimit)
 void Application::update(float deltaTime)
 {
     updateInput(deltaTime);
+    // Events affect this frame. Existing instances move first; births happen at
+    // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
     mMeteorSystem.update(deltaTime);
+    mMeteorShower.update(deltaTime);
     mDebugTimer += deltaTime;
     if (mDebugTimer >= 1.0)
     {
@@ -207,6 +210,15 @@ void Application::onKey(int key, int action)
     if (key == GLFW_KEY_G) mMoveSpeed *= 2;
     if (key == GLFW_KEY_H) mMoveSpeed /= 2;
     if (key == GLFW_KEY_F2) mCameraDebug = !mCameraDebug;
+    if (key == GLFW_KEY_R) restartSequence();
+}
+
+void Application::restartSequence()
+{
+    if (!mInitialized) return;
+    MainSequence::reset(mTimeline, mMeteorShower, mMeteorSystem);
+    mTimeline.play();
+    mDebugTimer = 0;
 }
 
 void Application::onFramebufferSize(int width, int height)
@@ -220,6 +232,7 @@ void Application::shutdown()
 {
     if (mWindow) glfwMakeContextCurrent(mWindow);
     mTimeline = Timeline{}; // Release borrowed scene/camera bindings first.
+    mMeteorShower.reset();
     mMeteorSystem.clear();
     mMeteorSystem.releaseGraphics();
     mScene.objects.clear();

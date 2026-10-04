@@ -46,10 +46,15 @@ bool MeteorShower::configure(const MeteorShowerConfig& config)
         ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
     mTangent = glm::normalize(glm::cross(mDirection, helper));
     mBitangent = glm::cross(mDirection, mTangent);
-    mRandom.seed(config.seed);
+    reset();
+    return true;
+}
+
+void MeteorShower::reset()
+{
+    mRandom.seed(mConfig.seed);
     mSpawnCredit = 0;
     mRunning = false;
-    return true;
 }
 
 float MeteorShower::random(float minimum, float maximum)

@@ -2,12 +2,25 @@
 #include "animation/CameraTrack.h"
 #include "animation/TransformTrack.h"
 #include "animation/EventTrack.h"
-#include <iostream>
 
-bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& scene)
+bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& scene, MeteorShower& shower)
 {
     auto* earth = scene.findObject("Earth");
     if (!earth || !scene.findObject("EarthClouds")) return false;
+    MeteorShowerConfig config;
+    config.spawnRate = 30;
+    config.origin = earth->transform.position + glm::vec3(0, 17, 0);
+    config.spawnHalfExtents = {17, 3, 17};
+    config.direction = {0.15f, -1, 0.1f};
+    config.spreadRadians = glm::radians(12.0f);
+    config.minSpeed = 3;
+    config.maxSpeed = 5;
+    config.minScale = 0.4f;
+    config.maxScale = 0.9f;
+    config.minLifetime = 4;
+    config.maxLifetime = 7;
+    config.seed = 42;
+    if (!shower.configure(config)) return false;
     // A fresh sequence also supports Application shutdown/init on the same instance.
     camera.positionTrack() = {};
     camera.targetTrack() = {};
@@ -51,11 +64,18 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
     animateRotation("EarthClouds", 5.0f);
 
     auto events = std::make_unique<EventTrack>();
-    events->addEvent(10, [] { std::cout << "[Cinematic] Camera zoom\n"; });
-    events->addEvent(30, [] { std::cout << "[Cinematic] End\n"; });
+    events->addEvent(10, [&shower] { shower.start(); });
+    events->addEvent(20, [&shower] { shower.stop(); });
     timeline.addTrack(std::move(events));
 
     timeline.play();
 
     return true;
+}
+
+void MainSequence::reset(Timeline& timeline, MeteorShower& shower, MeteorSystem& system)
+{
+    timeline.stop(); // Rearm events and reset camera/transform tracks.
+    shower.reset();  // Restore the configured seed and spawn credit.
+    system.clear();
 }
