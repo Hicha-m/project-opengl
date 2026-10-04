@@ -6,6 +6,7 @@
 #include <stdexcept>
 #endif
 #include "platform/ResourcePaths.h"
+#include "platform/AndroidLog.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -65,6 +66,9 @@ void mobileTest(Application& app) {
 
 int main(int argc, char** argv)
 {
+#ifdef __ANDROID__
+    AndroidLogBuffer output(std::cout), errors(std::cerr);
+#endif
 #ifdef PROJECT_MOBILE
     std::cout << std::unitbuf;
 #endif

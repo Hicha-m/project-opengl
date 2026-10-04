@@ -33,6 +33,7 @@ def main():
     parser.add_argument("application", type=Path)
     parser.add_argument("--output", type=Path, default=Path("build/mobile-evidence"))
     args = parser.parse_args()
+    args.application = args.application.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     if args.platform == "android":
         wait_for(lambda: run("adb", "shell", "getprop", "sys.boot_completed").strip() == "1", 300)
