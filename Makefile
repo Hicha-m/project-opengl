@@ -1,5 +1,5 @@
 CXX := g++
-CPPFLAGS := -Isrc $(shell pkg-config --cflags glfw3 glew sdl3)
+CPPFLAGS := -Isrc -Ithird_party/stb $(shell pkg-config --cflags glfw3 glew sdl3)
 CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -std=c++17
 LDLIBS := $(shell pkg-config --libs glfw3 glew sdl3) -lGL
 
@@ -10,6 +10,7 @@ MUSIC_WAV := $(BUILD_DIR)/music/cinematic.wav
 IMPACT_WAV := $(BUILD_DIR)/music/impact.wav
 
 COMMON_SRC := \
+	src/platform/ResourcePaths.cpp \
 	src/Application.cpp \
 	src/audio/MusicPlayer.cpp \
 	src/camera/Camera.cpp \

@@ -1,4 +1,4 @@
-name: CMake multi-platform and Docker
+name: Desktop portability and packages
 
 on:
   push:
@@ -16,17 +16,20 @@ jobs:
   build:
     name: ${{ matrix.os }} / ${{ matrix.compiler }} / ${{ matrix.build_type }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
-        build_type: [Debug, Release]
-        compiler: [clang++]
         include:
-          - os: ubuntu-24.04
-            compiler: g++
-            build_type: Release
+          - {os: ubuntu-24.04, compiler: clang++, build_type: Debug}
+          - {os: ubuntu-24.04, compiler: clang++, build_type: Release}
+          - {os: ubuntu-24.04, compiler: g++, build_type: Release}
+          - {os: ubuntu-24.04-arm, compiler: g++, build_type: Release}
+          - {os: macos-14, compiler: clang++, build_type: Debug}
+          - {os: macos-14, compiler: clang++, build_type: Release}
+          - {os: macos-15-intel, compiler: clang++, build_type: Release}
+          - {os: windows-2022, compiler: MSVC, build_type: Debug}
+          - {os: windows-2022, compiler: MSVC, build_type: Release}
     steps:
       - uses: actions/checkout@v6
       - name: Install Linux dependencies
@@ -38,28 +41,83 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja glfw glew glm ffmpeg
       - name: Install SDL3
+        if: runner.os != 'Windows'
         uses: libsdl-org/setup-sdl@main
         with:
           version: 3.2.10
           install-linux-dependencies: true
-      - name: Configure
+      - name: Configure Unix
+        if: runner.os != 'Windows'
         run: >-
           cmake -S . -B build/cmake -G Ninja
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
           -DENABLE_RUNTIME_TESTS=${{ runner.os == 'Linux' && 'ON' || 'OFF' }}
+      - name: Cache Windows dependencies
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: build/cmake/vcpkg_installed
+          key: vcpkg-windows-static-${{ hashFiles('vcpkg.json') }}
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ffmpeg --no-progress -y
+          git -C "$env:VCPKG_INSTALLATION_ROOT" fetch origin 19780d9cdf84d0944cf9a318666703b89ab6629c --depth 1
+          git -C "$env:VCPKG_INSTALLATION_ROOT" checkout 19780d9cdf84d0944cf9a318666703b89ab6629c
+          & "$env:VCPKG_INSTALLATION_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          cmake -S . -B build/cmake -A x64 `
+            "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
       - name: Build
-        run: cmake --build build/cmake --parallel 2
-      - name: CPU and audio tests
-        run: ctest --test-dir build/cmake -L unit --output-on-failure
-      - name: OpenGL tests with software rendering
+        run: cmake --build build/cmake --config ${{ matrix.build_type }} --parallel 2
+      - name: CPU, audio and resource tests
+        run: ctest --test-dir build/cmake -C ${{ matrix.build_type }} -L unit --output-on-failure
+      - name: Full OpenGL integration tests
         if: runner.os == 'Linux'
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure
+      - name: Create distributable package
+        run: cpack --config build/cmake/CPackConfig.cmake -C ${{ matrix.build_type }} -B build/packages
+      - name: Verify relocated Linux package
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python3 scripts/verify_package.py build/packages
+      - name: Verify relocated macOS package
+        if: runner.os == 'macOS'
+        run: python3 scripts/verify_package.py build/packages
+      - name: Install software OpenGL for Windows package test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP mesa.7z
+          Invoke-WebRequest https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695') { throw 'Mesa checksum mismatch' }
+          7z x $archive "-o$env:RUNNER_TEMP/mesa" -y
+      - name: Verify relocated Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python scripts/verify_package.py build/packages --mesa "$env:RUNNER_TEMP/mesa/x64"
+      - name: Upload verified package
+        if: (matrix.build_type == 'Release' && matrix.compiler != 'g++') || matrix.os == 'ubuntu-24.04-arm'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}
+          path: |
+            build/packages/*.zip
+            build/packages/*.tar.gz
+          if-no-files-found: error
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
+          path: build/cmake/Testing/Temporary/
 
   docker:
-    name: Build and publish Docker image
+    name: Linux container
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 45

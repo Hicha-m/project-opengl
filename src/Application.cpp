@@ -47,11 +47,12 @@ bool Application::init()
         shutdown();
         return false;
     }
-    if(mOptions.music && mOptions.visible && mMusic.load("build/music/cinematic.wav"))
+    if(mOptions.music && mMusic.load("build/music/cinematic.wav"))
     {
         mTimeline.setDuration(mMusic.duration());
         if(!mMusic.loadImpact("build/music/impact.wav")) std::cerr<<"Impact sound unavailable\n";
     }
+    else if (mOptions.music) std::cerr << "Music unavailable; continuing without audio\n";
     mFPSStart = glfwGetTime();
     mInitialized = true;
     return true;
@@ -60,10 +61,22 @@ bool Application::init()
 bool Application::initOpenGL()
 {
     if (mOptions.width <= 0 || mOptions.height <= 0) return false;
+    // Let GLFW select Win32, Cocoa, X11 or Wayland according to the host.
+    glfwSetErrorCallback([](int code, const char* description) {
+        std::cerr << "GLFW error " << code << ": " << description << '\n';
+    });
 #if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+    glfwInitHint(GLFW_PLATFORM, GLFW_ANY_PLATFORM);
 #endif
-    if (!glfwInit())
+    bool initialized = glfwInit() == GLFW_TRUE;
+#if defined(__linux__) && (GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4))
+    // A stale Wayland socket can coexist with a working X11/XWayland display.
+    if (!initialized && glfwPlatformSupported(GLFW_PLATFORM_X11)) {
+        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+        initialized = glfwInit() == GLFW_TRUE;
+    }
+#endif
+    if (!initialized)
     {
         std::cerr << "GLFW initialization failed\n";
         return false;
@@ -94,9 +107,12 @@ bool Application::initOpenGL()
     }
     glfwMakeContextCurrent(mWindow);
     glewExperimental = GL_TRUE;
-    if (glewInit() != GLEW_OK)
+    const GLenum glewStatus = glewInit();
+    // GLEW loads core GL first, then probes GLX. Wayland/EGL has no GLX display.
+    const bool coreLoadedWithoutGLX = glewStatus == GLEW_ERROR_NO_GLX_DISPLAY && GLEW_VERSION_3_3;
+    if ((glewStatus != GLEW_OK && !coreLoadedWithoutGLX) || !GLEW_VERSION_3_3)
     {
-        std::cerr << "Failed to initialize GLEW\n";
+        std::cerr << "Failed to initialize OpenGL 3.3: " << glewGetErrorString(glewStatus) << '\n';
         return false;
     }
     // GLEW may leave GL_INVALID_ENUM when probing a core context.

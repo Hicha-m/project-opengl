@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)
+endif()
 project(OpenGLSpaceCinematic VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -6,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 include(CTest)
 option(ENABLE_RUNTIME_TESTS "Register the OpenGL tests (requires a display)" OFF)
+option(BUNDLE_RUNTIME_DEPENDENCIES "Include desktop libraries in distributable packages" ON)
 
 find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
@@ -15,6 +19,7 @@ find_package(SDL3 3.2 CONFIG REQUIRED)
 find_program(FFMPEG_EXECUTABLE ffmpeg REQUIRED)
 
 add_library(project_core STATIC
+    src/platform/ResourcePaths.cpp
     src/Application.cpp
     src/audio/MusicPlayer.cpp
     src/camera/Camera.cpp
@@ -44,9 +49,10 @@ add_library(project_core STATIC
     src/animation/Timeline.cpp
 )
 target_include_directories(project_core PUBLIC src)
+target_include_directories(project_core SYSTEM PRIVATE third_party/stb)
 target_link_libraries(project_core PUBLIC OpenGL::GL glfw GLEW::GLEW glm::glm SDL3::SDL3)
 if(MSVC)
-    target_compile_options(project_core PRIVATE /W4)
+    target_compile_options(project_core PRIVATE /W4 /utf-8)
 else()
     target_compile_options(project_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endif()
@@ -78,7 +84,23 @@ add_custom_target(runtime_audio ALL DEPENDS
 
 add_executable(project src/main.cpp)
 target_link_libraries(project PRIVATE project_core)
-set_target_properties(project PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_DIR}")
+# Keep all configurations beside the same assets, including Visual Studio builds.
+set_target_properties(project PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_DIR}/$<0:>")
+if(APPLE)
+    set_target_properties(project PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.hicha-m.project-opengl"
+        MACOSX_BUNDLE_BUNDLE_NAME "OpenGL Space Cinematic"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+    add_custom_command(TARGET project POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/shaders" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/shaders"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/textures" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/textures"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/models" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/models"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/music" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/build/music"
+        VERBATIM)
+elseif(UNIX)
+    set_target_properties(project PROPERTIES INSTALL_RPATH "$ORIGIN/lib")
+endif()
 add_dependencies(project runtime_assets runtime_audio)
 add_custom_target(run
     COMMAND "$<TARGET_FILE:project>"
@@ -86,13 +108,13 @@ add_custom_target(run
     DEPENDS project USES_TERMINAL)
 
 if(BUILD_TESTING)
-    set(TEST_NAMES music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application)
+    set(TEST_NAMES resource_paths music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application)
     foreach(name IN LISTS TEST_NAMES)
         add_executable(test_${name} tests/${name}.cpp)
         target_link_libraries(test_${name} PRIVATE project_core)
         # The existing tests use assert(), including for operations with side effects.
         if(MSVC)
-            target_compile_options(test_${name} PRIVATE /UNDEBUG)
+            target_compile_options(test_${name} PRIVATE /UNDEBUG /utf-8)
         else()
             target_compile_options(test_${name} PRIVATE -UNDEBUG)
         endif()
@@ -112,8 +134,46 @@ if(BUILD_TESTING)
     endforeach()
 endif()
 
-# Install a runnable directory; shared dependencies are provided by the host/container.
-install(TARGETS project RUNTIME DESTINATION .)
-install(DIRECTORY shaders textures models DESTINATION .)
-install(FILES "${RUNTIME_DIR}/build/music/cinematic.wav"
-    "${RUNTIME_DIR}/build/music/impact.wav" DESTINATION build/music)
+if(APPLE)
+    install(TARGETS project BUNDLE DESTINATION .)
+    set(RESOURCE_DESTINATION "project.app/Contents/Resources")
+else()
+    install(TARGETS project RUNTIME_DEPENDENCY_SET application_dependencies RUNTIME DESTINATION .)
+    set(RESOURCE_DESTINATION ".")
+endif()
+install(DIRECTORY shaders textures models DESTINATION "${RESOURCE_DESTINATION}")
+install(FILES "${RUNTIME_DIR}/build/music/cinematic.wav" "${RUNTIME_DIR}/build/music/impact.wav"
+    DESTINATION "${RESOURCE_DESTINATION}/build/music")
+install(FILES README.md DESTINATION .)
+install(DIRECTORY third_party/ DESTINATION licenses
+    FILES_MATCHING PATTERN "*.txt" PATTERN "*.md" PATTERN "stb_image.h")
+
+if(BUNDLE_RUNTIME_DEPENDENCIES)
+    if(APPLE)
+        # Rewrites dylib paths to the relocated .app instead of Homebrew/build paths.
+        install(CODE "include(BundleUtilities)\nfixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/project.app\" \"\" \"\")")
+        # Ad-hoc signing allows the modified bundle to launch on Apple Silicon.
+        install(CODE "execute_process(COMMAND codesign --force --deep --sign - \"\${CMAKE_INSTALL_PREFIX}/project.app\" COMMAND_ERROR_IS_FATAL ANY)")
+    elseif(WIN32)
+        install(RUNTIME_DEPENDENCY_SET application_dependencies
+            PRE_EXCLUDE_REGEXES "api-ms-.*" "ext-ms-.*"
+            POST_EXCLUDE_REGEXES ".*[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/[Ss][Yy][Ss][Tt][Ee][Mm]32/.*"
+            RUNTIME DESTINATION .)
+    else()
+        # Graphics drivers and OS libraries come from the host; bundle our desktop libraries.
+        install(RUNTIME_DEPENDENCY_SET application_dependencies
+            PRE_INCLUDE_REGEXES "^lib(SDL3|glfw|GLEW)\\.so.*"
+            PRE_EXCLUDE_REGEXES ".*"
+            LIBRARY DESTINATION lib)
+    endif()
+endif()
+
+set(CPACK_PACKAGE_NAME "OpenGLSpaceCinematic")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+if(WIN32 OR APPLE)
+    set(CPACK_GENERATOR ZIP)
+else()
+    set(CPACK_GENERATOR TGZ)
+endif()
+include(CPack)

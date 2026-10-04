@@ -47,6 +47,7 @@ public:
     float sequenceTime() const { return mTimeline.getTime(); }
     float playbackRate() const { return mPlaybackRate; }
     bool sequencePaused() const { return mSequencePaused; }
+    bool audioReady() const { return mMusic.ready() && mMusic.impactReady(); }
     MeteorSystem& meteors() { return mMeteorSystem; }
     ParticleSystem& particles() { return mParticleSystem; }
     const EarthBreakupSystem& earthBreakup() const { return mEarthBreakupSystem; }

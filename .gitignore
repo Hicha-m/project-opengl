@@ -6,3 +6,4 @@ project
 
 # Generated objects, dependency files and test binaries
 /build/
+__pycache__/

@@ -31,7 +31,7 @@ RUN cmake -S . -B build/cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
 
 FROM ubuntu:24.04 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libgl1-mesa-dri libglx-mesa0 libglfw3 libglew2.2 \
+  libgl1 libopengl0 libgl1-mesa-dri libglx-mesa0 libglfw3 libglew2.2 \
     libasound2t64 libpulse0 && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/sdl/lib/libSDL3.so* /usr/local/lib/
 RUN ldconfig

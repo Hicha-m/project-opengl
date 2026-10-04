@@ -11,6 +11,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include "Application.h"
+#include "platform/ResourcePaths.h"
 #include "scene/SceneSetup.h"
 #include "cinematic/MainSequence.h"
 #include "systems/MeteorShower.h"
@@ -657,6 +658,7 @@ int main()
     ApplicationOptions options;
     options.fullscreen = false;
     options.visible = false;
+    options.music = false; // This suite exercises deterministic simulation, audio has its own test.
     options.width = 640;
     options.height = 480;
     Application app(options);
@@ -1036,11 +1038,11 @@ int main()
     app.shutdown();
 
     // Missing assets must fail cleanly, then allow recovery on the same instance.
-    auto original = std::filesystem::current_path();
+    auto original = ResourcePaths::root();
     auto empty = std::filesystem::temp_directory_path() /
         ("space-empty-assets-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(empty);
-    std::filesystem::current_path(empty);
+    ResourcePaths::setRoot(empty);
     assert(!app.init());
     assert(glfwGetCurrentContext() == nullptr);
     // Valid shaders but missing textures exercise partial GPU resource cleanup too.
@@ -1073,7 +1075,7 @@ int main()
     std::filesystem::create_symlink(original / "shaders/core.frag", empty / "shaders/core.frag");
     std::filesystem::remove(empty / "shaders/bright.frag");
     assert(!app.init() && glfwGetCurrentContext()==nullptr && !app.earthBreakup().graphicsReady());
-    std::filesystem::current_path(original);
+    ResourcePaths::setRoot(original);
     std::filesystem::remove_all(empty);
     assert(app.init());
     app.run(3);

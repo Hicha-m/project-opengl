@@ -51,22 +51,39 @@ The cinematic music drives the visible timeline when it is available. FFmpeg
 converts the supplied MP3 files to WAV during the build, while SDL3 handles
 playback, volume, mute and impact sounds.
 
-## Requirements
+## Desktop support and downloadable packages
 
-- Linux with an X11 display, or macOS (CMake build)
-- C++17 compiler and CMake 3.20+ (or GNU Make)
-- OpenGL 3.3+
-- GLFW 3, GLEW, GLM and SDL3 development packages
-- FFmpeg
+The desktop targets are **Windows x64, macOS Apple Silicon / Intel, and Linux
+x64 / ARM64**. Each platform has its own executable; one binary cannot run on
+all operating systems. A graphics driver supporting OpenGL 3.3 is required.
 
-The project expects the libraries to be discoverable through `pkg-config`:
-`glfw3`, `glew` and `sdl3`.
+Download the matching `package-*` artifact from a successful run in
+[GitHub Actions](https://github.com/Hicha-m/project-opengl/actions). Extract the
+complete archive, then launch `project.exe` on Windows, `project.app` on macOS,
+or `project` on Linux. Keep the resources and bundled libraries together.
+You can move the extracted directory and launch it from another working directory,
+including paths containing spaces and non-ASCII characters.
 
-## Build and run
+Packages contain converted WAV audio; **FFmpeg is needed only when building**.
+SDL3 handles music and impact playback through the host's default audio device.
+The application reports unavailable audio and can continue without sound.
+Do not set `SDL_AUDIO_DRIVER=dummy` when you want audible playback.
 
-### CMake (recommended)
+macOS packages are ad-hoc signed, not Apple-notarized. Linux packages include
+SDL3, GLFW and GLEW; system libraries and graphics drivers come from the host.
+The CI packages target the runner's operating system baseline, rather than every
+historical OS release. Rebuild from source for a different Linux baseline.
 
-Install OpenGL, GLFW, GLEW, GLM, SDL3 and FFmpeg first. On Fedora:
+## Requirements for building
+
+- C++17 compiler and CMake 3.21+ (GNU Make is also available on Linux).
+- OpenGL, GLFW 3.3+, GLEW, GLM and SDL3 3.2+ development packages.
+- FFmpeg on `PATH` to convert the supplied MP3 files.
+- `stb_image` is included in `third_party/`; no system stb package is needed.
+
+### Linux and macOS (CMake)
+
+On Fedora:
 
 ```bash
 sudo dnf install gcc-c++ cmake make glfw-devel glew-devel glm-devel SDL3-devel ffmpeg
@@ -79,38 +96,64 @@ brew install cmake glfw glew glm sdl3 ffmpeg
 ```
 
 Ubuntu 24.04 requires SDL3 to be built from source; the Dockerfile and GitHub
-workflow handle this automatically.
+workflow handle this automatically. CMake uses the libraries' CMake packages;
+the GNU Make build uses `pkg-config`.
 
 Run from the project directory:
 
 ```bash
 cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
 cmake --build build/cmake --parallel 2
-ctest --test-dir build/cmake --output-on-failure
+ctest --test-dir build/cmake -L unit --output-on-failure
 cmake --build build/cmake --target run
 ```
 
-The executable and assets are staged under `build/cmake/runtime/`, including
-converted audio under `build/cmake/runtime/build/music/`. You can also run
-`cd build/cmake/runtime && ./project`. To enable the graphical integration test:
+### Windows (Visual Studio and vcpkg)
+
+Install Visual Studio 2022 with the Desktop development with C++ workload,
+CMake, Git, FFmpeg and [vcpkg](https://learn.microsoft.com/vcpkg/get_started/get-started).
+Set `VCPKG_ROOT` to your vcpkg checkout. The repository's `vcpkg.json` pins the
+library versions through a baseline. Run in PowerShell from the project directory:
+
+```powershell
+cmake -S . -B build/cmake -A x64 `
+  "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+  '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
+cmake --build build/cmake --config Release --parallel 2
+ctest --test-dir build/cmake -C Release -L unit --output-on-failure
+cmake --build build/cmake --config Release --target run
+```
+
+This configuration links the libraries and MSVC runtime statically. You can also
+use shared libraries; CMake includes their runtime dependencies during packaging.
+
+### Packaging and graphical validation
+
+After building:
+
+```bash
+cpack --config build/cmake/CPackConfig.cmake -C Release -B build/packages
+```
+
+This creates a ZIP on Windows/macOS or a compressed tar archive on Linux.
+The macOS `.app` includes its resources and bundled dylibs with rewritten paths.
+You can also stage an installation with
+`cmake --install build/cmake --config Release --prefix /path/to/installation`.
+Use `-DBUNDLE_RUNTIME_DEPENDENCIES=OFF` only if the destination provides the libraries.
+
+To enable the complete OpenGL integration test on Linux:
 
 ```bash
 cmake -S . -B build/cmake -DENABLE_RUNTIME_TESTS=ON
 cmake --build build/cmake --parallel 2
-ctest --test-dir build/cmake -L runtime --output-on-failure
-```
-
-On a Linux server with `xvfb` and `xauth` installed, use:
-
-```bash
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure
 ```
 
-Assertions remain enabled in the test executables even for Release builds.
-To install the executable and assets into another directory, run
-`cmake --install build/cmake --prefix /path/to/installation` after building,
-then launch `./project` from that installation directory. Shared libraries
-must also be installed on the destination machine.
+`project --smoke-test` creates a hidden window, loads the complete scene, verifies
+music and impact audio initialization, and renders three frames. Set
+`SDL_AUDIO_DRIVER=dummy` for automated testing. This verifies the playback code;
+it cannot confirm what a user hears from a physical speaker.
 
 ### GNU Make
 
@@ -162,26 +205,30 @@ The container desktop launch is intended for Linux hosts.
 
 ## GitHub Actions (CI/CD)
 
-The workflow is `.github/workflows/cmake-multi-platform.yml` (the directory name
-is **workflows**, plural). It runs on pushes, pull requests and manual triggers:
+[The workflow](.github/workflows/cmake-multi-platform.yml) runs on pushes,
+pull requests and manual triggers:
 
-- CMake builds in Debug and Release on Linux and macOS using Clang, plus GCC
-  Release on Linux.
-- The 13 CPU/audio tests run on both systems; the OpenGL test runs on Linux
-  using Xvfb and Mesa software rendering.
-- After every build job succeeds, Docker builds the image and repeats the tests
-  in the Ubuntu container.
-- A push to the repository's default branch also publishes
-  `ghcr.io/hicha-m/project-opengl:latest` and a `sha-<commit>` tag. Other pushes
-  and pull requests build without publishing.
+- Debug and Release builds with Clang on Linux and macOS Apple Silicon, plus
+  Linux GCC, Linux ARM64, macOS Intel and Windows MSVC builds.
+- Fourteen CPU/audio/resource tests, including executable-relative loading
+  and WAV playback from Unicode paths.
+- The complete OpenGL integration suite on Linux with Xvfb and Mesa.
+- Package extraction and scene/audio/rendering startup on every desktop target
+  from an unrelated working directory and a Unicode installation path.
+- Windows CI uses a checksum-verified Mesa software renderer for its startup
+  test; it is not included in the distributed application.
+- Verified Release packages are uploaded as downloadable artifacts.
+- Docker builds only after the desktop checks succeed. Default-branch pushes
+  also publish `ghcr.io/hicha-m/project-opengl:latest` and `sha-<commit>`.
 
-Commit and push these files to GitHub to activate the workflow. Publication uses
-GitHub's built-in `GITHUB_TOKEN` with `packages: write`; no Docker Hub account or
-personal registry token is required. If organization settings restrict that
-permission, allow package publishing for the workflow in the repository settings.
-Check the **Actions** tab for builds and the repository's **Packages** area for
-the image. This delivery step publishes a container image; it does not deploy a
-running application to a server.
+## Mobile scope
+
+The current application is a desktop OpenGL/GLFW application. It does not produce
+an Android APK or an iOS app. SDL3 audio can be reused for those platforms, but
+mobile support requires replacing GLFW's window/input loop, adapting the shaders
+and renderer to OpenGL ES or a supported mobile graphics backend, packaging
+resources for mobile storage, and implementing touch controls. Desktop packages
+must not be presented as mobile builds. See [the mobile assessment](docs/MOBILE.md).
 
 ## Controls
 
