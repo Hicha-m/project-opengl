@@ -5,6 +5,8 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <cmath>
+#include <stdexcept>
 
 
 //-----------------------------------------------------------------------------
@@ -23,7 +25,7 @@ std::vector<std::string> split(std::string s, std::string t)
 		size_t pos = s.find(t);
 		if(pos == std::string::npos)
 		{
-			res.push_back(s); 
+			res.push_back(s);
 			break;
 		}
 		res.push_back(s.substr(0, pos));
@@ -49,157 +51,76 @@ if (mVAO != 0) glDeleteVertexArrays(1, &mVAO);
 if (mVBO != 0) glDeleteBuffers(1, &mVBO);
 }
 
-//-----------------------------------------------------------------------------
-// Loads a Wavefront OBJ model
-//
-// NOTE: This is not a complete, full featured OBJ loader.  It is greatly
-// simplified.
-// Assumptions!
-//  - OBJ file must contain only triangles
-//  - We ignore materials
-//  - We ignore normals
-//  - only commands "v", "vt" and "f" are supported
-//-----------------------------------------------------------------------------
+// OBJ geometry, triangulation and named material sections. MTL assets remain
+// owned by the scene. Parse into temporary data: failure preserves a loaded mesh.
 bool Mesh::loadOBJ(const std::string& filename)
 {
-	std::vector<unsigned int> vertexIndices, uvIndices, normalIndices;
-	std::vector<glm::vec3> tempVertices;
-	std::vector<glm::vec2> tempUVs;
-	std::vector<glm::vec3> tempNormals;
-
-
-	if (filename.find(".obj") != std::string::npos)
-	{
-		std::ifstream fin(filename, std::ios::in);
-		if (!fin)
-		{
-			std::cerr << "Cannot open " << filename << std::endl;
-			return false;
-		}
-
-		std::cout << "Loading OBJ file " << filename << " ..." << std::endl;
-
-		std::string lineBuffer;
-		while (std::getline(fin, lineBuffer))
-		{
-			std::stringstream ss(lineBuffer);
-			std::string cmd;
-			ss >> cmd;
-
-			if (cmd == "v")
-			{
-				glm::vec3 vertex(0.0f);
-				ss >> vertex.x >> vertex.y >> vertex.z;
-				tempVertices.push_back(vertex);
-			}
-			else if (cmd == "vt")
-			{
-				glm::vec2 uv;
-				int dim = 0;
-				while (dim < 2 && ss >> uv[dim])
-					dim++;
-				
-				tempUVs.push_back(uv);
-			}
-			else if (cmd == "vn")
-			{
-				glm::vec3 normal;
-				int dim = 0;
-				while (dim < 3 && ss >> normal[dim])
-					dim++;
-				normal = glm::normalize(normal);
-				tempNormals.push_back(normal);
-			}
-			else if (cmd == "f")
-			{
-				std::string faceData;
-				int vertexIndex, uvIndex, normalIndex;
-
-				while (ss>>faceData)
-				{
-					std::vector<std::string> data = split(faceData, "/");
-
-					if (data.size() < 1) continue;
-
-					if (data[0].size() > 0)
-					{
-						sscanf(data[0].c_str(), "%d", &vertexIndex);
-						vertexIndices.push_back(vertexIndex);
-					}
-
-					if (data.size() >= 1)
-					{
-						// Is face format v//vn?  If data[1] is empty string then
-						// this vertex has no texture coordinate
-						if (data[1].size() > 0)
-						{
-							sscanf(data[1].c_str(), "%d", &uvIndex);
-							uvIndices.push_back(uvIndex);
-						}
-						else
-						{
-							uvIndices.push_back(0); // keep the indices aligned, even if this vertex has no texture coordinate
-						}
-					}
-					
-					if (data.size() >= 2)
-					{
-						// Does this vertex have a normal?
-						if (data[2].size() > 0)
-						{
-							sscanf(data[2].c_str(), "%d", &normalIndex);
-							normalIndices.push_back(normalIndex);
-						}
-						else
-						{
-							normalIndices.push_back(0);
-						}
-					}
-				}
-			}
-		}
-
-		// Close the file
-		fin.close();
-
-
-		// For each vertex of each triangle
-		for (unsigned int i = 0; i < vertexIndices.size(); i++)
-		{
-			Vertex meshVertex{};
-
-			// Get the attributes using the indices
-
-			if (tempVertices.size() > 0)
-			{
-				glm::vec3 vertex = tempVertices[vertexIndices[i] - 1];
-				meshVertex.position = vertex;
-			}
-
-			if (tempNormals.size() > 0)
-			{
-				glm::vec3 normal = tempNormals[normalIndices[i] - 1];
-				meshVertex.normal = normal;
-			}
-
-			if (tempUVs.size() > 0)
-			{
-				glm::vec2 uv = tempUVs[uvIndices[i] - 1];
-				meshVertex.texCoords = uv;
-			}
-
-			meshVertex.tangent = glm::vec3(0.0f);
-			mVertices.push_back(meshVertex);
-		}
-
-		// Create and initialize the buffers
-		initBuffers();
-
-		return (mLoaded = true);
-	}
-
-	// We shouldn't get here so return failure
-	return false;
+    std::ifstream input(filename);
+    if(!input) { std::cerr<<"Cannot open "<<filename<<"\n"; return false; }
+    std::vector<glm::vec3> positions,normals;
+    std::vector<glm::vec2> uvs;
+    std::vector<Vertex> vertices;
+    std::vector<MeshSection> sections;
+    std::string line, material="default";
+    auto index=[](const std::string& token,std::size_t count)->int {
+        std::size_t used=0;
+        const int value=std::stoi(token,&used);
+        if(used!=token.size() || !value) throw std::runtime_error("Invalid OBJ index");
+        const long resolved=value>0 ? long(value)-1 : long(count)+value;
+        if(resolved<0 || resolved>=long(count)) throw std::runtime_error("OBJ index out of range");
+        return int(resolved);
+    };
+    try {
+        while(std::getline(input,line)) {
+            std::istringstream row(line); std::string command; row>>command;
+            if(command=="v" || command=="vn") {
+                glm::vec3 v; if(!(row>>v.x>>v.y>>v.z)) return false;
+                if(!std::isfinite(v.x) || !std::isfinite(v.y) || !std::isfinite(v.z)) return false;
+                if(command=="v") positions.push_back(v);
+                else normals.push_back(glm::length(v)>0 ? glm::normalize(v) : glm::vec3(0));
+            } else if(command=="vt") {
+                glm::vec2 uv(0); if(!(row>>uv.x)) return false; row>>uv.y;
+                if(!std::isfinite(uv.x) || !std::isfinite(uv.y)) return false;
+                uvs.push_back(uv);
+            } else if(command=="usemtl") row>>material;
+            else if(command=="f") {
+                std::vector<Vertex> polygon; std::string token;
+                while(row>>token) {
+                    if(token[0]=='#') break;
+                    const auto data=split(token,"/");
+                    if(data.empty() || data.size()>3) return false;
+                    Vertex vertex{}; vertex.position=positions.at(index(data[0],positions.size()));
+                    if(data.size()>1 && !data[1].empty()) vertex.texCoords=uvs.at(index(data[1],uvs.size()));
+                    if(data.size()>2 && !data[2].empty()) vertex.normal=normals.at(index(data[2],normals.size()));
+                    polygon.push_back(vertex);
+                }
+                if(polygon.size()<3) return false;
+                for(std::size_t i=1;i+1<polygon.size();++i) {
+                    Vertex triangle[]={polygon[0],polygon[i],polygon[i+1]};
+                    const auto edge1=triangle[1].position-triangle[0].position;
+                    const auto edge2=triangle[2].position-triangle[0].position;
+                    const auto cross=glm::cross(edge1,edge2);
+                    const auto normal=glm::length(cross)>0 ? glm::normalize(cross) : glm::vec3(0,1,0);
+                    const auto uv1=triangle[1].texCoords-triangle[0].texCoords;
+                    const auto uv2=triangle[2].texCoords-triangle[0].texCoords;
+                    const float determinant=uv1.x*uv2.y-uv2.x*uv1.y;
+                    const auto tangent=std::abs(determinant)>0.000001f ? (edge1*uv2.y-edge2*uv1.y)/determinant : glm::vec3(0);
+                    if(sections.empty() || sections.back().material!=material)
+                        sections.push_back({material,vertices.size(),0});
+                    for(auto& vertex:triangle) {
+                        if(glm::length(vertex.normal)==0) vertex.normal=normal;
+                        vertex.tangent=glm::length(tangent)>0 ? glm::normalize(tangent) : glm::vec3(0);
+                        vertices.push_back(vertex); ++sections.back().count;
+                    }
+                }
+            }
+        }
+    } catch(const std::exception& error) {
+        std::cerr<<"Invalid OBJ "<<filename<<": "<<error.what()<<"\n"; return false;
+    }
+    if(vertices.empty()) return false;
+    setVertices(vertices); mSections=std::move(sections);
+    return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -236,7 +157,7 @@ void Mesh::initBuffers()
 	// Vertex Tangent
 	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(8 * sizeof(GLfloat)));
 	glEnableVertexAttribArray(3);
-	
+
 	// unbind to make sure other code does not change it somewhere else
 	glBindVertexArray(0);
 }
@@ -246,6 +167,7 @@ void Mesh::setVertices(
 )
 {
     mVertices = vertices;
+    mSections.clear();
 
     if (mVertices.empty())
     {

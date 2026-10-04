@@ -720,7 +720,18 @@ int main()
         CinematicCamera camera;
         Timeline timeline;
         assert(SceneSetup::build(scene, lights, resources));
-        assert(scene.getObjectCount() == 22);
+        assert(scene.getObjectCount() == 35);
+        assert(resources.shuttleSource.vertices().size()==33957);
+        assert(resources.shuttleSource.sections().size()==13);
+        assert(resources.shuttleParts.size()==13);
+        // Polygon triangulation, absent UVs/normals and relative indices.
+        { std::ofstream obj("/tmp/mesh-parser.obj");
+          obj<<"v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nusemtl hull\nf -4 -3 -2 -1\n"; }
+        Mesh parsed; assert(parsed.loadOBJ("/tmp/mesh-parser.obj"));
+        assert(parsed.vertices().size()==6 && parsed.sections()[0].material=="hull");
+        for(const auto& v:parsed.vertices()) assert(v.normal==glm::vec3(0,0,1));
+        { std::ofstream obj("/tmp/mesh-parser-invalid.obj"); obj<<"v 0 0 0\nf 1 2 3\n"; }
+        assert(!parsed.loadOBJ("/tmp/mesh-parser-invalid.obj") && parsed.vertices().size()==6);
         assert(scene.findObject("Earth")->mesh == &resources.earthSphere.getMesh());
         assert(scene.findObject("EarthClouds")->material.blending);
         assert(!scene.findObject("Stars")->material.depthWrite);
@@ -751,10 +762,10 @@ int main()
         assert(meteors.initGraphics());
         SolarSystem solar;
         assert(MainSequence::build(timeline, camera, scene, shower, &solar, &breakup));
-        const int frames[] = {0, 96, 160, 192, 208, 224, 264, 360, 384, 400, 420, 441};
+        const int frames[] = {0, 96, 144, 160, 176, 192, 208, 224, 264, 360, 384, 400, 420, 441};
         constexpr int imageCount = sizeof(frames)/sizeof(frames[0]);
         const char* images[] = {"/tmp/space-start.ppm", "/tmp/space-middle.ppm",
-            "/tmp/space-bombardment.ppm", "/tmp/space-cracks.ppm",
+            "/tmp/shuttle-departure.ppm", "/tmp/space-bombardment.ppm", "/tmp/shuttle-escape.ppm", "/tmp/space-cracks.ppm",
             "/tmp/space-breakup.ppm", "/tmp/space-core.ppm",
             "/tmp/space-fragments.ppm", "/tmp/space-aftermath.ppm",
             "/tmp/solar-system.ppm", "/tmp/milky-way.ppm",
@@ -1016,13 +1027,16 @@ int main()
     std::filesystem::create_directory_symlink(original / "shaders", empty / "shaders");
     assert(!app.init());
     assert(glfwGetCurrentContext() == nullptr);
+    // Shuttle model absent after the planet textures have loaded.
+    std::filesystem::create_directory_symlink(original / "textures", empty / "textures");
+    assert(!app.init() && glfwGetCurrentContext()==nullptr);
+    std::filesystem::create_directory_symlink(original / "models", empty / "models");
     // Scene assets present, meteor shader absent: clean up the whole partial init.
     std::filesystem::remove(empty / "shaders"); // Remove only the temporary symlink.
     std::filesystem::create_directory(empty / "shaders");
     for (const auto& file : std::filesystem::directory_iterator(original / "shaders"))
         if (file.path().filename() != "meteor.frag")
             std::filesystem::create_symlink(file.path(), empty / "shaders" / file.path().filename());
-    std::filesystem::create_directory_symlink(original / "textures", empty / "textures");
     assert(!app.init());
     assert(glfwGetCurrentContext() == nullptr);
     assert(!app.meteors().graphicsReady() && app.meteors().size() == 0);

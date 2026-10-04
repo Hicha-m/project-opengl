@@ -4,8 +4,63 @@
 #include "animation/EventTrack.h"
 #include "systems/SolarSystem.h"
 #include "systems/EarthBreakupSystem.h"
+#include <cmath>
 
 namespace {
+    const glm::vec3 escapeDirection=glm::normalize(glm::vec3(0.287f,0.819f,-0.497f));
+    bool isShuttle(const SceneObject& object) { return object.name=="Shuttle" || object.name.rfind("Shuttle/",0)==0; }
+    class EscapeTrack : public TimelineTrack {
+    public:
+        EscapeTrack(Scene& scene,CinematicCamera& camera,bool movingEarth)
+            : mScene(scene),mCamera(camera) {
+            mOrigin=movingEarth?SolarSystem::planetPosition(SolarSystem::Planets[2],30):scene.findObject("Earth")->transform.position;
+            const float times[]={0,30,36,44,52,62,78,90,96,100,105,MainSequence::Duration};
+            const float distances[]={8,8,14,26,55,110,240,500,1800,6500,16000,35000};
+            for(unsigned i=0;i<12;++i) mDistance.addKeyframe(times[i],distances[i],EasingType::EaseInOut);
+        }
+        void update(float,float time) override { apply(time); }
+        void reset(float time) override { apply(time); }
+    private:
+        void apply(float time) {
+            const glm::vec3 position=mOrigin+escapeDirection*mDistance.evaluate(time);
+            const glm::vec3 rotation(std::atan2(escapeDirection.y,-escapeDirection.z),-std::asin(escapeDirection.x),0);
+            for(auto& object:mScene.objects) if(isShuttle(object)) {
+                object.transform.position=position; object.transform.rotation=rotation;
+                object.transform.scale=glm::vec3(6); object.visible=time>=30;
+            }
+            // Keep the departing ship in the upper half of the Earth shot.
+            const auto* earth=mScene.findObject("Earth");
+            const float departure=0.35f*glm::smoothstep(30.0f,42.0f,time);
+            if(earth && time>=30) mCamera.setPose(mCamera.getPosition(),
+                glm::mix(mCamera.target(),position,departure));
+            const float follow=glm::smoothstep(46.0f,60.0f,time);
+            if(follow>0) {
+                const glm::vec3 up(0,0.519f,0.855f), right(0.958f,-0.246f,0.149f);
+                const float side=1-glm::smoothstep(78.0f,94.0f,time);
+                const auto eye=position+escapeDirection*12.0f+(up*3.0f+right*4.0f)*side;
+                auto framedEye=glm::mix(mCamera.getPosition(),eye,follow);
+                const auto target=glm::mix(mCamera.target(),position,follow);
+                // During the handoff, keep both the planet and craft inside the
+                // vertical field of view instead of passing between them.
+                if(earth && time<60) {
+                    const auto outward=glm::normalize(framedEye-target);
+                    float distance=glm::distance(framedEye,target);
+                    const float halfFov=glm::radians(mCamera.getFOV()*0.5f);
+                    auto fit=[&](const glm::vec3& center,float radius) {
+                        const auto offset=center-target;
+                        const float along=glm::dot(offset,outward);
+                        const float transverse=glm::length(offset-outward*along);
+                        distance=std::max(distance,along+transverse/std::tan(halfFov)+radius/std::sin(halfFov));
+                    };
+                    fit(earth->transform.position,10.0f*(1-glm::smoothstep(58.0f,60.0f,time)));
+                    fit(position,3.2f);
+                    framedEye=target+outward*distance;
+                }
+                mCamera.setPose(framedEye,target);
+            }
+        }
+        Scene& mScene; CinematicCamera& mCamera; glm::vec3 mOrigin; AnimationTrack<float> mDistance;
+    };
     class SolarTrack : public TimelineTrack {
     public:
         SolarTrack(SolarSystem& solar, Scene& scene, MeteorShower& shower, const EarthBreakupSystem* breakup)
@@ -99,6 +154,8 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
         return current ? (current->transform.position-initialEarth)*(1.0f-glm::smoothstep(90.0f,96.0f,time)) : glm::vec3(0);
     }));
 
+    if(scene.findObject("Shuttle")) timeline.addTrack(std::make_unique<EscapeTrack>(scene,camera,solar!=nullptr));
+
     auto animateRotation = [&](const std::string& name, float degreesPerSecond)
     {
         auto track = std::make_unique<TransformTrack>([&scene, name]() -> Transform*
@@ -131,4 +188,12 @@ void MainSequence::reset(Timeline& timeline, MeteorShower& shower, MeteorSystem&
     timeline.stop(); // Rearm events and reset camera/transform tracks.
     shower.reset();  // Restore the configured seed and spawn credit.
     system.clear();
+}
+
+void MainSequence::continueEscape(Scene& scene,CinematicCamera& camera,float deltaTime)
+{
+    if(!scene.findObject("Shuttle") || !std::isfinite(deltaTime) || deltaTime<=0) return;
+    const auto displacement=escapeDirection*(4000.0f*deltaTime);
+    for(auto& object:scene.objects) if(isShuttle(object)) object.transform.position+=displacement;
+    camera.setPose(camera.getPosition()+displacement,camera.target()+displacement);
 }

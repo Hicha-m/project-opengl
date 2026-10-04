@@ -7,6 +7,7 @@ TARGET := project
 SCENE ?= src/main
 BUILD_DIR := build
 MUSIC_WAV := $(BUILD_DIR)/music/cinematic.wav
+IMPACT_WAV := $(BUILD_DIR)/music/impact.wav
 
 COMMON_SRC := \
 	src/Application.cpp \
@@ -47,11 +48,15 @@ DEPS := $(COMMON_OBJ:.o=.d) $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
 .PHONY: all run clean test test-sequence test-runtime
 all: $(TARGET)
 
-$(MUSIC_WAV): music/Can\ You\ Hear\ The\ Music.mp3
+$(MUSIC_WAV): audio/Can\ You\ Hear\ The\ Music.mp3
 	@mkdir -p $(dir $@)
 	ffmpeg -v error -y -i "$<" -ar 48000 -ac 2 -c:a pcm_s16le "$@"
 
-$(TARGET): $(MAIN_OBJ) $(COMMON_OBJ) | $(MUSIC_WAV)
+$(IMPACT_WAV): audio/asteroid-hitting-something.mp3
+	@mkdir -p $(dir $@)
+	ffmpeg -v error -y -i "$<" -ar 48000 -ac 2 -c:a pcm_s16le "$@"
+
+$(TARGET): $(MAIN_OBJ) $(COMMON_OBJ) | $(MUSIC_WAV) $(IMPACT_WAV)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD_DIR)/%.o: %.cpp
@@ -64,7 +69,7 @@ $(TEST_BIN): $(BUILD_DIR)/tests/%: $(BUILD_DIR)/tests/%.o $(COMMON_OBJ)
 run: $(TARGET)
 	./$(TARGET)
 
-test: $(BUILD_DIR)/tests/music_player $(MUSIC_WAV) $(BUILD_DIR)/tests/solar_system $(BUILD_DIR)/tests/earth_breakup $(BUILD_DIR)/tests/destruction_level $(BUILD_DIR)/tests/earth_damage $(BUILD_DIR)/tests/meteor_trail $(BUILD_DIR)/tests/particle_system $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence $(BUILD_DIR)/tests/meteor_system $(BUILD_DIR)/tests/meteor_shower $(BUILD_DIR)/tests/meteor_collision $(BUILD_DIR)/tests/impact_light
+test: $(BUILD_DIR)/tests/music_player $(MUSIC_WAV) $(IMPACT_WAV) $(BUILD_DIR)/tests/solar_system $(BUILD_DIR)/tests/earth_breakup $(BUILD_DIR)/tests/destruction_level $(BUILD_DIR)/tests/earth_damage $(BUILD_DIR)/tests/meteor_trail $(BUILD_DIR)/tests/particle_system $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence $(BUILD_DIR)/tests/meteor_system $(BUILD_DIR)/tests/meteor_shower $(BUILD_DIR)/tests/meteor_collision $(BUILD_DIR)/tests/impact_light
 	SDL_AUDIO_DRIVER=dummy ./$(BUILD_DIR)/tests/music_player
 	./$(BUILD_DIR)/tests/solar_system
 	./$(BUILD_DIR)/tests/timeline
@@ -82,9 +87,9 @@ test: $(BUILD_DIR)/tests/music_player $(MUSIC_WAV) $(BUILD_DIR)/tests/solar_syst
 test-sequence: $(BUILD_DIR)/tests/main_sequence
 	./$(BUILD_DIR)/tests/main_sequence
 
-$(BUILD_DIR)/tests/music_player: | $(MUSIC_WAV)
+$(BUILD_DIR)/tests/music_player: | $(MUSIC_WAV) $(IMPACT_WAV)
 
-test-runtime: $(BUILD_DIR)/tests/application $(MUSIC_WAV)
+test-runtime: $(BUILD_DIR)/tests/application $(MUSIC_WAV) $(IMPACT_WAV)
 	./$(BUILD_DIR)/tests/application
 
 clean:

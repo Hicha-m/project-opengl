@@ -3,6 +3,10 @@
 #include "systems/EarthDamageSystem.h"
 #include "systems/SolarSystem.h"
 #include <cmath>
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
 
 namespace
 {
@@ -13,6 +17,61 @@ namespace
         GLint linked = GL_FALSE;
         glGetProgramiv(shader.getProgram(), GL_LINK_STATUS, &linked);
         return linked == GL_TRUE;
+    }
+
+    bool loadShuttle(Scene& scene, SceneResources& r)
+    {
+        if (!loadShader(r.shuttleShader,"shaders/shuttle.vert","shaders/shuttle.frag")
+            || !r.shuttleSource.loadOBJ("models/shuttle/shuttle.obj")) return false;
+        struct Surface { glm::vec3 color{0.8f}; float metal=0, rough=0.7f; std::string diffuse,normal; };
+        std::unordered_map<std::string,Surface> surfaces;
+        std::ifstream file("models/shuttle/shuttle.mtl");
+        if(!file) return false;
+        std::string line,name;
+        while(std::getline(file,line)) {
+            std::istringstream row(line); std::string key; row>>key;
+            if(key=="newmtl") row>>name;
+            else if(!name.empty()) {
+                auto& material=surfaces[name];
+                if(key=="Kd") row>>material.color.x>>material.color.y>>material.color.z;
+                else if(key=="Pm") row>>material.metal;
+                else if(key=="Pr") row>>material.rough;
+                else if(key=="map_Kd") row>>material.diffuse;
+                else if(key=="norm") row>>material.normal;
+            }
+        }
+        const auto& vertices=r.shuttleSource.vertices();
+        glm::vec3 low(vertices.front().position), high(low);
+        for(const auto& v:vertices) { low=glm::min(low,v.position); high=glm::max(high,v.position); }
+        const auto center=(low+high)*0.5f, extent=high-low;
+        const float size=std::max({extent.x,extent.y,extent.z});
+        for(const auto& section:r.shuttleSource.sections()) {
+            auto part=std::make_unique<ShuttlePart>();
+            part->name=r.shuttleParts.empty()?"Shuttle":"Shuttle/"+section.material;
+            std::vector<Vertex> subset(vertices.begin()+section.first,vertices.begin()+section.first+section.count);
+            for(auto& v:subset) v.position=(v.position-center)/size;
+            part->mesh.setVertices(subset);
+            const auto surface=surfaces[section.material];
+            part->material=Material(&r.shuttleShader);
+            auto& material=part->material;
+            if(!surface.diffuse.empty()) {
+                if(!part->diffuse.loadTexture("models/shuttle/"+surface.diffuse,true)) return false;
+                material.addTexture("surfaceMap",&part->diffuse,0);
+            }
+            if(!surface.normal.empty()) {
+                if(!part->normal.loadTexture("models/shuttle/"+surface.normal,true)) return false;
+                material.addTexture("normalMap",&part->normal,1);
+            }
+            material.setInt("hasSurfaceMap",!surface.diffuse.empty());
+            material.setInt("hasNormalMap",!surface.normal.empty());
+            material.setVec3("baseColor",surface.color);
+            material.setVec3("sunPosition",SolarSystem::SunCenter);
+            material.setFloat("metallic",surface.metal); material.setFloat("roughness",surface.rough);
+            SceneObject object(part->name,&part->mesh,&r.shuttleShader);
+            object.material=material; object.visible=false;
+            scene.addObject(object); r.shuttleParts.push_back(std::move(part));
+        }
+        return !r.shuttleParts.empty();
     }
 
     bool loadResources(SceneResources& r)
@@ -114,6 +173,7 @@ bool SceneSetup::build(Scene& scene, LightManager& lightManager, SceneResources&
     moon.material.addTexture("surfaceMap",&resources.moonTexture,0);
     moon.material.setVec3("sunPosition",SolarSystem::SunCenter);
     scene.addObject(moon);
+    if(!loadShuttle(scene,resources)) return false;
     SceneObject rings("SaturnRings",&resources.ringMesh,&resources.ringShader);
     rings.transform.scale=glm::vec3(23);
     rings.transform.rotation.z=glm::radians(26.7f);

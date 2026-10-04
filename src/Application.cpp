@@ -47,7 +47,10 @@ bool Application::init()
         return false;
     }
     if(mOptions.music && mOptions.visible && mMusic.load("build/music/cinematic.wav"))
+    {
         mTimeline.setDuration(mMusic.duration());
+        if(!mMusic.loadImpact("build/music/impact.wav")) std::cerr<<"Impact sound unavailable\n";
+    }
     mFPSStart = glfwGetTime();
     mInitialized = true;
     return true;
@@ -129,10 +132,13 @@ void Application::run(std::size_t frameLimit)
 void Application::update(float deltaTime)
 {
     updateInput(deltaTime);
-    if(mMusic.running()) deltaTime=std::max(0.0f,mMusic.position()-mTimeline.getTime());
+    const float wallDelta=deltaTime;
+    const bool finished=mTimeline.getTime()>=mTimeline.getDuration();
+    if(mMusic.running() && !finished) deltaTime=std::max(0.0f,mMusic.position()-mTimeline.getTime());
     // Events affect this frame. Existing instances move first; births happen at
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
+    if(finished) MainSequence::continueEscape(mScene,mCinematicCamera,wallDelta);
     auto sunlight=mLightManager.getDirectionalLight();
     sunlight.direction=glm::normalize(mScene.findObject("Earth")->transform.position-SolarSystem::SunCenter);
     mLightManager.setDirectionalLight(sunlight);
@@ -153,6 +159,7 @@ void Application::update(float deltaTime)
     if (!hittingCore) {
         mImpactParticleEmitter.consume(mMeteorSystem.impacts());
         mImpactLightSystem.consume(mMeteorSystem.impacts());
+        mMusic.playImpacts(mMeteorSystem.impacts(),mFPSMode?mFPSCamera.getPosition():mCinematicCamera.getPosition(),mTimeline.getTime());
     }
     mImpactLightSystem.update(deltaTime);
     mImpactLightSystem.publish(mLightManager);
