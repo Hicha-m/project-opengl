@@ -454,7 +454,12 @@ instant d'explosion dans la Timeline. Au stepping de 0,25 s testé, elle
 survient à **52 s après 43 impacts**, laissant **38 s de plan final**.
 Le noyau publie alors sa lumière et son émission HDR alimente le bloom
 existant. Après rupture, `Application` arrête la pluie et simule les météores
-restants sans collider terrestre, jusqu'à leur expiration. Les 32 fragments
+restants avec le collider du noyau (rayon local 0,55), jusqu'à leur contact
+ou leur expiration. Le rendu réduit progressivement la taille du météore dans une zone allant
+de trois rayons du noyau à sa surface (avec marge pour la taille du météore),
+sans modifier sa trajectoire ou sa collision. Un contact absorbe le météore sans inscrire de dégâts
+terrestres ni déclencher de nouveaux flashes ou bursts. Le collider utilise
+la pose capturée lors de la rupture et ne tient pas compte du halo de bloom. Les 32 fragments
 préparés s'éloignent : aucune population supplémentaire de débris n'est créée.
 Les particules disparaissent selon leur courte durée de vie. La roche des
 météores reste texturée, sans nouvelle fissuration ou fragmentation.

@@ -118,10 +118,23 @@ void MeteorSystem::releaseGraphics()
 }
 
 void MeteorSystem::render(Renderer& renderer, LightManager& lights,
-    const glm::mat4& view, const glm::mat4& projection, const glm::vec3& cameraPosition)
+    const glm::mat4& view, const glm::mat4& projection, const glm::vec3& cameraPosition,
+    const SphereCollider* absorption)
 {
     if (!mResources) return;
-    for (const auto& meteor : mMeteors)
+    for (const auto& meteor : mMeteors) {
+        auto visible = meteor.transform;
+        if (absorption && absorption->isValid()) {
+            const float size = std::max({visible.scale.x,visible.scale.y,visible.scale.z});
+            const float contactRadius = absorption->radius + size;
+            const float outerRadius = contactRadius + 2.0f * absorption->radius;
+            const float distance = glm::distance(visible.position,absorption->center);
+            const float progress = glm::clamp((distance-contactRadius)/(outerRadius-contactRadius),0.0f,1.0f);
+            const float factor = progress*progress*(3.0f-2.0f*progress);
+            if (factor <= 0) continue;
+            visible.scale *= factor;
+        }
         renderer.renderMesh(mResources->sphere.getMesh(), mResources->material,
-            meteor.transform, lights, view, projection, cameraPosition);
+            visible, lights, view, projection, cameraPosition);
+    }
 }

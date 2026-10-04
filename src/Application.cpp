@@ -130,18 +130,23 @@ void Application::update(float deltaTime)
     // the frame boundary and begin moving on the next frame.
     mTimeline.update(deltaTime);
     mMeteorTrailEmitter.observe(mMeteorSystem.meteors());
-    if (mEarthBreakupSystem.active()) mMeteorSystem.update(deltaTime);
+    const bool hittingCore = mEarthBreakupSystem.active();
+    if (hittingCore) mMeteorSystem.update(deltaTime, mEarthBreakupSystem.coreCollider());
     else mMeteorSystem.update(deltaTime, SceneSetup::earthCollider(mScene, *mResources));
     // Advance existing particles before births, so every burst is visible at age zero.
     mParticleSystem.update(deltaTime);
     mMeteorTrailEmitter.update(mMeteorSystem.meteors(), deltaTime);
     const auto* earth = mScene.findObject("Earth");
     mEarthDamageSystem.update(deltaTime);
-    mEarthDamageSystem.consume(mMeteorSystem.impacts(), earth->transform, mResources->earthSphere.getRadius());
+    if (!hittingCore)
+        mEarthDamageSystem.consume(mMeteorSystem.impacts(), earth->transform, mResources->earthSphere.getRadius());
     mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
     mEarthBreakupSystem.update(deltaTime,mEarthDamageSystem.destructionLevel(),earth->transform);
-    mImpactParticleEmitter.consume(mMeteorSystem.impacts());
-    mImpactLightSystem.consume(mMeteorSystem.impacts());
+    // Core contact only absorbs meteors; Earth effects belong to the intact planet.
+    if (!hittingCore) {
+        mImpactParticleEmitter.consume(mMeteorSystem.impacts());
+        mImpactLightSystem.consume(mMeteorSystem.impacts());
+    }
     mImpactLightSystem.update(deltaTime);
     mImpactLightSystem.publish(mLightManager);
     mEarthBreakupSystem.publish(mLightManager);
@@ -192,7 +197,9 @@ void Application::render()
     mScene.findObject("EarthClouds")->visible = !mEarthBreakupSystem.active();
     mScene.findObject("Earth")->material.setFloat("destructionLevel", mEarthDamageSystem.destructionLevel());
     mRenderer.render(mScene, mLightManager, view, projection, position);
-    mMeteorSystem.render(mRenderer, mLightManager, view, projection, position);
+    const auto core = mEarthBreakupSystem.coreCollider();
+    mMeteorSystem.render(mRenderer, mLightManager, view, projection, position,
+        mEarthBreakupSystem.active() ? &core : nullptr);
     mEarthBreakupSystem.render(mRenderer,mScene.findObject("Earth")->material,mLightManager,view,projection,position);
     mParticleSystem.render(view, projection);
     mHDR->finish();

@@ -34,7 +34,8 @@ public:
     bool graphicsReady() const { return bool(mResources); }
     void render(Renderer& renderer, LightManager& lights,
         const glm::mat4& view, const glm::mat4& projection,
-        const glm::vec3& cameraPosition);
+        const glm::vec3& cameraPosition,
+        const SphereCollider* absorption = nullptr); // Shrink within 3 core radii.
 
 private:
     void simulate(float deltaTime, const SphereCollider* collider);

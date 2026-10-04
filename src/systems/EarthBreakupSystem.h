@@ -3,6 +3,7 @@
 #include <vector>
 #include "scene/Transform.h"
 #include "scene/LightManager.h"
+#include "geometry/SphereCollider.h"
 class Mesh;
 class Renderer;
 class Material;
@@ -21,6 +22,7 @@ class EarthBreakupSystem
 public:
     static constexpr unsigned Sectors = 8, Bands = 4, FragmentCount = Sectors * Bands;
     static constexpr float Threshold = 0.95f;
+    static constexpr float CoreRadius = 0.55f;
     EarthBreakupSystem();
     ~EarthBreakupSystem();
     EarthBreakupSystem(const EarthBreakupSystem&) = delete;
@@ -30,6 +32,7 @@ public:
     bool active() const { return mActive; }
     const std::vector<EarthFragment>& fragments() const { return mFragments; }
     PointLight coreLight() const;
+    SphereCollider coreCollider() const; // Captured pose; invalid while inactive.
     // Called after flashes have replaced the transient light list for this frame.
     void publish(LightManager& lights) const;
     bool initGraphics(const Mesh& earthMesh);

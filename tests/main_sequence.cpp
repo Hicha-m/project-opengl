@@ -33,16 +33,19 @@ int main()
         assert(!timeline.isPlaying() && timeline.getTime()==0 && system.size()==0);
         assert(scene.findObject("Earth")->transform.rotation==glm::vec3(0));
         assert(std::abs(glm::distance(camera.getPosition(),earth.transform.position)-34)<0.001f);
-        timeline.play(); MeteorId lastId=0; std::size_t impacts=0, births=0;
+        timeline.play(); MeteorId lastId=0; std::size_t impacts=0, births=0, coreContacts=0;
         float minScale=10,maxScale=0,minX=100,maxX=-100,breakTime=0;
         for(int frame=0;frame<360;++frame) {
             timeline.update(0.25f);
-            if(breakup.active()) system.update(0.25f); else system.update(0.25f,collider);
-            damage.update(0.25f); damage.consume(system.impacts(),scene.findObject("Earth")->transform);
+            const bool hittingCore=breakup.active();
+            if(hittingCore) system.update(0.25f,breakup.coreCollider()); else system.update(0.25f,collider);
+            damage.update(0.25f);
+            if(!hittingCore) damage.consume(system.impacts(),scene.findObject("Earth")->transform);
             breakup.update(0.25f,damage.destructionLevel(),scene.findObject("Earth")->transform);
             if(breakup.active()) { shower.stop(); if(!breakTime) breakTime=timeline.getTime(); }
             shower.update(0.25f);
-            impacts+=system.impacts().size();
+            if(hittingCore) coreContacts+=system.impacts().size();
+            else impacts+=system.impacts().size();
             const auto vp=glm::perspective(glm::radians(camera.getFOV()),640.0f/480,0.1f,10000.0f)*camera.getViewMatrix();
             for(const auto& meteor:system.meteors()) if(meteor.id>lastId) {
                 lastId=meteor.id; ++births;
@@ -76,6 +79,7 @@ int main()
                 }
             }
         }
+        assert(coreContacts>0);
         assert(impacts>20 && minScale<0.2f && maxScale>0.65f && minX<-2 && maxX>2);
         assert(breakTime>40 && breakTime<65); // Long buildup and at least 25 s of aftermath.
         assert(!timeline.isPlaying() && timeline.getTime()==MainSequence::Duration && !shower.isRunning());

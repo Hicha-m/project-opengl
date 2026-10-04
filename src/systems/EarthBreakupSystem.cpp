@@ -24,7 +24,7 @@ struct EarthBreakupResources
 {
     std::vector<std::unique_ptr<Mesh>> outer, inner;
     ShaderProgram coreShader, interiorShader;
-    Sphere core{0.55f,32,32};
+    Sphere core{EarthBreakupSystem::CoreRadius,32,32};
     Material coreMaterial, interiorMaterial;
 };
 EarthBreakupSystem::EarthBreakupSystem()
@@ -64,6 +64,10 @@ void EarthBreakupSystem::update(float dt, float level, const Transform& earth)
         f.transform.position += f.velocity*dt;
         f.transform.rotation += f.angularVelocity*dt;
     }
+}
+SphereCollider EarthBreakupSystem::coreCollider() const
+{
+    return {mEarth.position, mActive ? CoreRadius * std::max({mEarth.scale.x,mEarth.scale.y,mEarth.scale.z}) : 0.0f};
 }
 PointLight EarthBreakupSystem::coreLight() const
 {

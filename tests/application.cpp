@@ -723,22 +723,26 @@ int main()
             int imageIndex = 0;
             std::size_t impactCount = 0;
             float previousDestruction = 0;
+            std::size_t coreContacts = 0;
             for (int frame = 0; frame <= 360; ++frame)
             {
+                const bool hittingCore = breakup.active();
                 if (frame > 0)
                 {
                     timeline.update(0.25f);
                     trails.observe(meteors.meteors());
-                    if (breakup.active()) meteors.update(0.25f);
+                    if (hittingCore) meteors.update(0.25f, breakup.coreCollider());
                     else meteors.update(0.25f, SceneSetup::earthCollider(scene, resources));
                     particles.update(0.25f);
                     trails.update(meteors.meteors(), 0.25f);
                     damage.update(0.25f);
-                    damage.consume(meteors.impacts(),scene.findObject("Earth")->transform);
+                    if (!hittingCore) damage.consume(meteors.impacts(),scene.findObject("Earth")->transform);
                     assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
                     breakup.update(0.25f,damage.destructionLevel(),scene.findObject("Earth")->transform);
-                    particleEmitter.consume(meteors.impacts());
-                    flashes.consume(meteors.impacts());
+                    if (!hittingCore) {
+                        particleEmitter.consume(meteors.impacts());
+                        flashes.consume(meteors.impacts());
+                    }
                     flashes.update(0.25f);
                     flashes.publish(lights);
                     breakup.publish(lights);
@@ -749,10 +753,12 @@ int main()
                 previousDestruction = damage.destructionLevel();
                 if (pass == 0) firstDestruction.push_back(damage.destructionLevel());
                 else assert(damage.destructionLevel() == firstDestruction[frame]);
-                impactCount += meteors.impacts().size();
+                if (hittingCore) coreContacts += meteors.impacts().size();
+                else impactCount += meteors.impacts().size();
                 for (const auto& impact : meteors.impacts())
                 {
-                    assert(std::abs(glm::length(impact.position - collider.center) - collider.radius) < 0.0001f);
+                    assert(std::abs(glm::length(impact.position - collider.center)
+                        - (hittingCore ? breakup.coreCollider().radius : collider.radius)) < 0.0001f);
                     assert(std::abs(glm::length(impact.normal) - 1) < 0.0001f);
                 }
                 if (!breakup.active()) for (const auto& meteor : meteors.meteors())
@@ -810,7 +816,9 @@ int main()
                 scene.findObject("Earth")->material.setFloat("destructionLevel", damage.destructionLevel());
                 renderer.render(scene, lights, view, projection, camera.getPosition());
                 const auto withoutMeteors = pixels();
-                meteors.render(renderer, lights, view, projection, camera.getPosition());
+                const auto core = breakup.coreCollider();
+                meteors.render(renderer, lights, view, projection, camera.getPosition(),
+                    breakup.active() ? &core : nullptr);
                 const auto rendered = pixels();
                 if (meteors.size() == 0) assert(rendered == withoutMeteors);
                 // Meteors can exist outside the camera: offscreen births are intentional.
@@ -827,7 +835,7 @@ int main()
                 ++imageIndex;
             }
             assert(imageIndex == imageCount && !timeline.isPlaying() && timeline.getTime() == MainSequence::Duration);
-            assert(impactCount > 0 && damage.destructionLevel() > 0 && breakup.active());
+            assert(impactCount > 0 && coreContacts > 0 && damage.destructionLevel() > 0 && breakup.active());
         }
         breakup.reset(); scene.findObject("Earth")->visible=true; scene.findObject("EarthClouds")->visible=true;
         damage.clear(); assert(damage.upload(resources.earthDamageTexture, resources.earthHeatTexture));
