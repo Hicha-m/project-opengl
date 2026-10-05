@@ -17,3 +17,10 @@ python -m glad --api gl:core=3.3 --extensions '' --out-path third_party/glad --r
 It obtains function pointers from the current GLFW context, including native
 Win32/Cocoa, Wayland/EGL and OSMesa contexts. No system GLEW package is required.
 The generated-file and Khronos notices are in the headers and `licenses/GLAD.txt`.
+
+`dr_libs/dr_mp3.h` is vendored unchanged from
+https://github.com/mackron/dr_libs/tree/dfe8377631000664666519fdb83da193fd8037f4.
+SHA-256: `997b7ee18de6e6b81e2a83f1ea9fc62aef25c62b28d48db95635f49e65de0a2f`.
+It decodes MP3 music in memory, including encoder delay and padding, with no
+additional runtime library. The selected MIT No Attribution license is in
+`licenses/DR_MP3.txt`; the header also includes the alternative public-domain license.
