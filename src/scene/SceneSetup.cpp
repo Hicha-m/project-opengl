@@ -1,13 +1,13 @@
 #include "scene/SceneSetup.h"
+#include "assets/PreparedAssets.h"
 #include "platform/ResourcePaths.h"
+#include "platform/StartupProfile.h"
 #include "systems/EarthDamageSystem.h"
 #include "systems/SolarSystem.h"
 #include <algorithm>
 #include <cmath>
-#include <fstream>
-#include <sstream>
+#include <iostream>
 #include <stdexcept>
-#include <unordered_map>
 
 namespace
 {
@@ -17,7 +17,6 @@ namespace
         {
             return false;
         }
-        // The legacy shader loader logs compile errors but returns true after linking.
         GLint linked = GL_FALSE;
         glGetProgramiv(shader.getProgram(), GL_LINK_STATUS, &linked);
         return linked == GL_TRUE;
@@ -26,79 +25,33 @@ namespace
     bool loadShuttle(Scene& scene, SceneResources& resources)
     {
         if (!loadShader(resources.shuttleShader, "shaders/shuttle.vert", "shaders/shuttle.frag") ||
-            !loadShader(resources.exhaustShader, "shaders/shuttle.vert", "shaders/exhaust.frag") ||
-            !resources.shuttleSource.loadOBJ("models/shuttle/shuttle.obj"))
+            !loadShader(resources.exhaustShader, "shaders/shuttle.vert", "shaders/exhaust.frag"))
         {
             return false;
         }
-        struct Surface
+        ShuttleData shuttle;
+        try
         {
-            glm::vec3 color{0.8f};
-            float metallic = 0, roughness = 0.7f;
-            std::string diffuse, normal;
-        };
-        std::unordered_map<std::string, Surface> surfaces;
-        std::ifstream file(ResourcePaths::resolve("models/shuttle/shuttle.mtl"));
-        if (!file)
+            StartupProfile::Timer timer(StartupProfile::Shuttle);
+            shuttle = readShuttle(ResourcePaths::resolve("build/assets/shuttle.bin"));
+        }
+        catch (const std::exception& error)
         {
+            std::cerr << error.what() << '\n';
             return false;
         }
-        std::string line, name;
-        while (std::getline(file, line))
-        {
-            std::istringstream row(line);
-            std::string key;
-            row >> key;
-            if (key == "newmtl")
-            {
-                row >> name;
-            }
-            else if (!name.empty())
-            {
-                auto& material = surfaces[name];
-                if (key == "Kd")
-                {
-                    row >> material.color.x >> material.color.y >> material.color.z;
-                }
-                else if (key == "Pm")
-                {
-                    row >> material.metallic;
-                }
-                else if (key == "Pr")
-                {
-                    row >> material.roughness;
-                }
-                else if (key == "map_Kd")
-                {
-                    row >> material.diffuse;
-                }
-                else if (key == "norm")
-                {
-                    row >> material.normal;
-                }
-            }
-        }
-        const auto& vertices = resources.shuttleSource.vertices();
-        glm::vec3 low(vertices.front().position), high(low);
-        for (const auto& v : vertices)
-        {
-            low = glm::min(low, v.position);
-            high = glm::max(high, v.position);
-        }
-        const auto center = (low + high) * 0.5f, extent = high - low;
-        const float size = std::max({extent.x, extent.y, extent.z});
-        for (const auto& section : resources.shuttleSource.sections())
+        const auto& vertices = shuttle.geometry.vertices;
+        for (const auto& section : shuttle.geometry.sections)
         {
             auto part = std::make_unique<ShuttlePart>();
             part->name = resources.shuttleParts.empty() ? "Shuttle" : "Shuttle/" + section.material;
             std::vector<Vertex> subset(vertices.begin() + section.first,
                                        vertices.begin() + section.first + section.count);
-            for (auto& v : subset)
             {
-                v.position = (v.position - center) / size;
+                StartupProfile::Timer timer(StartupProfile::Shuttle);
+                part->mesh.setVertices(subset);
             }
-            part->mesh.setVertices(subset);
-            const auto surface = surfaces[section.material];
+            const auto surface = shuttle.surfaces.at(section.material);
             const bool exhaust = surface.diffuse == "Untitled101_20260818133021.png";
             auto* shader = exhaust ? &resources.exhaustShader : &resources.shuttleShader;
             part->material = Material(shader);

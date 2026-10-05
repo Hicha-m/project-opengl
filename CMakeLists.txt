@@ -20,6 +20,13 @@ find_program(FFMPEG_EXECUTABLE ffmpeg REQUIRED)
 add_library(glad STATIC third_party/glad/src/gl.c)
 target_include_directories(glad PUBLIC third_party/glad/include)
 
+add_library(prepared_assets STATIC src/assets/Geometry.cpp src/assets/PreparedAssets.cpp)
+target_include_directories(prepared_assets PUBLIC src)
+target_link_libraries(prepared_assets PUBLIC glm::glm)
+add_executable(prepare_assets tools/prepare_assets.cpp)
+target_include_directories(prepare_assets SYSTEM PRIVATE third_party/stb)
+target_link_libraries(prepare_assets PRIVATE prepared_assets)
+
 add_library(project_core STATIC
     src/platform/ResourcePaths.cpp
     src/Application.cpp
@@ -28,6 +35,7 @@ add_library(project_core STATIC
     src/camera/CinematicCamera.cpp
     src/graphics/Mesh.cpp
     src/graphics/ShaderProgram.cpp
+    src/graphics/ShaderBinaryCache.cpp
     src/graphics/Texture2D.cpp
     src/graphics/Renderer.cpp
     src/geometry/Sphere.cpp
@@ -53,7 +61,7 @@ add_library(project_core STATIC
 target_include_directories(project_core PUBLIC src)
 target_include_directories(project_core SYSTEM PRIVATE third_party/stb)
 target_include_directories(project_core SYSTEM PRIVATE third_party/dr_libs)
-target_link_libraries(project_core PUBLIC OpenGL::GL glfw glad glm::glm SDL3::SDL3)
+target_link_libraries(project_core PUBLIC prepared_assets OpenGL::GL glfw glad glm::glm SDL3::SDL3)
 target_compile_definitions(project_core PUBLIC GLFW_INCLUDE_NONE)
 if(MSVC)
     target_compile_options(project_core PRIVATE /W4 /utf-8)
@@ -66,10 +74,31 @@ set(RUNTIME_DIR "${CMAKE_CURRENT_BINARY_DIR}/runtime")
 add_custom_target(runtime_assets ALL)
 foreach(directory shaders textures models)
     add_custom_command(TARGET runtime_assets POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${RUNTIME_DIR}/${directory}"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/${directory}" "${RUNTIME_DIR}/${directory}"
         VERBATIM)
 endforeach()
+
+add_custom_command(OUTPUT "${RUNTIME_DIR}/build/assets/shuttle.bin"
+    COMMAND prepare_assets shuttle "${RUNTIME_DIR}/build/assets/shuttle.bin"
+        "${CMAKE_CURRENT_SOURCE_DIR}/models/shuttle/shuttle.obj" "${CMAKE_CURRENT_SOURCE_DIR}/models/shuttle/shuttle.mtl"
+    DEPENDS prepare_assets models/shuttle/shuttle.obj models/shuttle/shuttle.mtl VERBATIM)
+file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.vert" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.frag")
+add_custom_command(OUTPUT "${RUNTIME_DIR}/build/assets/shaders.bin"
+    COMMAND prepare_assets shaders "${RUNTIME_DIR}/build/assets/shaders.bin" ${SHADER_SOURCES}
+    DEPENDS prepare_assets ${SHADER_SOURCES} VERBATIM)
+file(GLOB TEXTURE_SOURCES CONFIGURE_DEPENDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    "textures/*/*.jpg" "textures/*/*.png" "models/shuttle/*.png")
+set(PREPARED_OUTPUTS "${RUNTIME_DIR}/build/assets/shuttle.bin" "${RUNTIME_DIR}/build/assets/shaders.bin")
+foreach(texture IN LISTS TEXTURE_SOURCES)
+    set(output "${RUNTIME_DIR}/build/assets/${texture}.rgba")
+    add_custom_command(OUTPUT "${output}"
+        COMMAND prepare_assets texture "${output}" "${CMAKE_CURRENT_SOURCE_DIR}/${texture}"
+        DEPENDS prepare_assets "${CMAKE_CURRENT_SOURCE_DIR}/${texture}" VERBATIM)
+    list(APPEND PREPARED_OUTPUTS "${output}")
+endforeach()
+add_custom_target(runtime_prepared ALL DEPENDS ${PREPARED_OUTPUTS})
 
 function(convert_audio input output)
     add_custom_command(OUTPUT "${RUNTIME_DIR}/build/music/${output}"
@@ -105,27 +134,42 @@ if(APPLE)
         MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.hicha-m.project-opengl"
         MACOSX_BUNDLE_BUNDLE_NAME "OpenGL Space Cinematic"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
-    add_custom_command(TARGET project POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/shaders" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/shaders"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/textures" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/textures"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/models" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/models"
-        COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/build/music/cinematic.wav"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/music" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/build/music"
+    # All configurations use project.app in RUNTIME_DIR. Literal paths avoid a
+    # generator-expression dependency cycle: project already depends on assets.
+    set(BUNDLE_RESOURCES "${RUNTIME_DIR}/project.app/Contents/Resources")
+    foreach(directory shaders textures models)
+        add_custom_command(TARGET runtime_assets POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E rm -rf "${BUNDLE_RESOURCES}/${directory}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/${directory}" "${BUNDLE_RESOURCES}/${directory}"
+            VERBATIM)
+    endforeach()
+    add_custom_command(TARGET runtime_prepared POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/assets" "${BUNDLE_RESOURCES}/build/assets"
+        VERBATIM)
+    add_custom_command(TARGET runtime_audio POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E rm -f "${BUNDLE_RESOURCES}/build/music/cinematic.wav"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/music" "${BUNDLE_RESOURCES}/build/music"
         VERBATIM)
 elseif(UNIX)
     set_target_properties(project PROPERTIES INSTALL_RPATH "$ORIGIN/lib")
 endif()
-add_dependencies(project runtime_assets runtime_audio)
+add_dependencies(project runtime_assets runtime_audio runtime_prepared)
 add_custom_target(run
     COMMAND "$<TARGET_FILE:project>"
     WORKING_DIRECTORY "${RUNTIME_DIR}"
     DEPENDS project USES_TERMINAL)
 
 if(BUILD_TESTING)
-    set(TEST_NAMES resource_paths music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application)
+    set(TEST_NAMES prepared_assets resource_paths music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application)
     foreach(name IN LISTS TEST_NAMES)
         add_executable(test_${name} tests/${name}.cpp)
         target_link_libraries(test_${name} PRIVATE project_core)
+        if(name STREQUAL "prepared_assets")
+            target_include_directories(test_${name} SYSTEM PRIVATE third_party/stb)
+        endif()
+        if(name STREQUAL "application" OR name STREQUAL "prepared_assets")
+            add_dependencies(test_${name} runtime_prepared)
+        endif()
         # The existing tests use assert(), including for operations with side effects.
         if(MSVC)
             target_compile_options(test_${name} PRIVATE /UNDEBUG /utf-8)
@@ -158,6 +202,7 @@ endif()
 install(DIRECTORY shaders textures models DESTINATION "${RESOURCE_DESTINATION}")
 install(FILES "${RUNTIME_DIR}/build/music/cinematic.mp3" "${RUNTIME_DIR}/build/music/impact.wav"
     DESTINATION "${RESOURCE_DESTINATION}/build/music")
+install(DIRECTORY "${RUNTIME_DIR}/build/assets" DESTINATION "${RESOURCE_DESTINATION}/build")
 install(FILES README.md DESTINATION .)
 install(FILES tools/export_mp4.py DESTINATION tools)
 install(DIRECTORY third_party/ DESTINATION licenses

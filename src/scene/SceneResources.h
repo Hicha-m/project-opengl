@@ -19,7 +19,6 @@ struct ShuttlePart
 struct SceneResources
 {
     ShaderProgram shuttleShader, exhaustShader;
-    Mesh shuttleSource;
     std::vector<std::unique_ptr<ShuttlePart>> shuttleParts;
     ShaderProgram earthShader, cloudShader, sunShader, starShader, planetShader, ringShader, orbitShader;
     std::array<Texture2D, 7> planetTextures;

@@ -6,6 +6,7 @@
 
 #include <glad/gl.h>
 #include <string>
+#include <memory>
 using std::string;
 
 class Texture2D
@@ -29,6 +30,7 @@ private:
 	Texture2D(Texture2D&&) noexcept;
 	Texture2D& operator=(Texture2D&&) noexcept;
 
+    std::shared_ptr<GLuint> mSharedTexture; // Immutable image shared until the last scene/system releases it.
 	GLuint mTexture;
 	int mRedWidth = 0, mRedHeight = 0;
 };

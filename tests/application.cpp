@@ -1,4 +1,8 @@
 #include "Application.h"
+#include "assets/PreparedAssets.h"
+#include "graphics/ShaderBinaryCache.h"
+#include "platform/StartupProfile.h"
+#include <SDL3/SDL.h>
 #include "cinematic/MainSequence.h"
 #include "platform/ResourcePaths.h"
 #include "scene/SceneSetup.h"
@@ -933,6 +937,83 @@ static void checkSolarViews()
     assert(glGetError() == GL_NO_ERROR);
 }
 
+static void checkSharedTextures(SceneResources& resources)
+{
+    GLint active = 0; glGetIntegerv(GL_ACTIVE_TEXTURE, &active); glActiveTexture(GL_TEXTURE0);
+    GLint previous = 0; glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous);
+    GLuint exhaust = 0; unsigned engines = 0;
+    for (const auto& part : resources.shuttleParts) {
+        if (!part->material.intUniforms.at("isExhaust")) continue;
+        part->diffuse.bind(); GLint texture = 0; glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+        if (exhaust) assert(exhaust == GLuint(texture));
+        exhaust = texture; ++engines;
+    }
+    assert(engines == 8 && exhaust != 0);
+    Texture2D moon;
+    assert(moon.loadTexture("textures/moon/2k_moon.jpg"));
+    moon.bind(); GLint a = 0; glGetIntegerv(GL_TEXTURE_BINDING_2D, &a);
+    resources.moonTexture.bind(); GLint b = 0; glGetIntegerv(GL_TEXTURE_BINDING_2D, &b);
+    assert(a == b);
+    // Replacing an image on one wrapper must preserve other owners.
+    assert(moon.loadTexture("textures/earth/2k_earth_daymap.jpg"));
+    assert(glIsTexture(a));
+    glBindTexture(GL_TEXTURE_2D, previous); glActiveTexture(active);
+}
+
+static void checkShaderCache()
+{
+    const auto original = ResourcePaths::root();
+    const auto temporary = std::filesystem::temp_directory_path() /
+        ("space-shader-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const std::string vertex = "#version 330 core\nvoid main(){gl_Position=vec4(0,0,0,1);}";
+    const std::string fragment = "#version 330 core\nout vec4 color; void main(){color=vec4(1);}//" + temporary.filename().string();
+    auto sources = ShaderSources{{"shaders/probe.vert", vertex}, {"shaders/probe.frag", fragment}};
+    const auto archive = temporary / "build/assets/shaders.bin";
+    writeShaders(archive, sources);
+    ResourcePaths::setRoot(temporary);
+    char* pref = SDL_GetPrefPath("OpenGLSpaceCinematic", "ShaderCache");
+    const auto directory = pref ? std::filesystem::u8path(pref) : std::filesystem::path{};
+    SDL_free(pref);
+    std::vector<std::filesystem::path> existing;
+    if (!directory.empty()) for (const auto& file : std::filesystem::directory_iterator(directory)) existing.push_back(file.path());
+    ShaderProgram shader;
+    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
+    std::filesystem::path created;
+    if (!directory.empty()) for (const auto& file : std::filesystem::directory_iterator(directory))
+        if (std::find(existing.begin(), existing.end(), file.path()) == existing.end()) created = file.path();
+    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag"));
+    if (!created.empty()) {
+        assert(shader.loadedFromCache());
+        // Both a truncated cache and a damaged payload must trigger recompilation.
+        std::filesystem::resize_file(created, 8);
+        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
+        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && shader.loadedFromCache());
+        { std::fstream file(created, std::ios::in | std::ios::out | std::ios::binary); file.seekg(-1, std::ios::end); int last = file.get(); file.seekp(-1, std::ios::end); file.put(last ^ 255); }
+        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
+        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && shader.loadedFromCache());
+    }
+    StartupProfile::disableShaderCache = true;
+    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
+    assert(!ShaderBinaryCache(vertex, fragment).supported());
+    StartupProfile::disableShaderCache = false;
+    auto change = [&](const ShaderSources& data, int step) {
+        writeShaders(archive, data);
+        std::filesystem::last_write_time(archive, std::filesystem::file_time_type::clock::now() + std::chrono::seconds(step));
+    };
+    sources["shaders/probe.frag"] = fragment + "\n// changed"; change(sources, 1);
+    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
+    const auto validProgram = shader.getProgram();
+    sources["shaders/probe.frag"] = "#version 330 core\ninvalid GLSL"; change(sources, 2);
+    assert(!shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && shader.getProgram() == validProgram);
+    sources["shaders/probe.vert"] = "#version 330 core\nout vec3 test; void main(){test=vec3(1);gl_Position=vec4(0,0,0,1);}";
+    sources["shaders/probe.frag"] = "#version 330 core\nin vec2 test; out vec4 color; void main(){color=vec4(test,0,1);}"; change(sources, 3);
+    assert(!shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && shader.getProgram() == validProgram);
+    assert(glGetError() == GL_NO_ERROR);
+    ResourcePaths::setRoot(original);
+    std::filesystem::remove_all(temporary);
+    if (!created.empty()) std::filesystem::remove(created);
+}
+
 static void checkShuttle(const Scene& source, SceneResources& resources)
 {
     Renderer renderer;
@@ -1048,6 +1129,8 @@ int main(int argc, char** argv)
         SceneResources resources;
         LightManager lights;
         assert(SceneSetup::build(scene, lights, resources));
+        checkSharedTextures(resources);
+        checkShaderCache();
         checkShuttle(scene, resources);
         std::cout << "Shuttle lighting and propulsion checks passed\n";
         return 0;
@@ -1148,9 +1231,12 @@ int main(int argc, char** argv)
         Timeline timeline;
         assert(SceneSetup::build(scene, lights, resources));
         assert(scene.getObjectCount() == 35);
-        assert(resources.shuttleSource.vertices().size() == 33957);
-        assert(resources.shuttleSource.sections().size() == 13);
+        std::size_t shuttleVertices = 0;
+        for (const auto& part : resources.shuttleParts) shuttleVertices += part->mesh.vertices().size();
+        assert(shuttleVertices == 33957);
         assert(resources.shuttleParts.size() == 13);
+        checkSharedTextures(resources);
+        checkShaderCache();
         checkShuttle(scene, resources);
         // Polygon triangulation, absent UVs/normals and relative indices.
         {
@@ -1572,39 +1658,32 @@ int main(int argc, char** argv)
     ResourcePaths::setRoot(empty);
     assert(!app.init());
     assert(glfwGetCurrentContext() == nullptr);
-    // Valid shaders but missing textures exercise partial GPU resource cleanup too.
-    std::filesystem::create_directory_symlink(original / "shaders", empty / "shaders");
-    assert(!app.init());
-    assert(glfwGetCurrentContext() == nullptr);
-    // Shuttle model absent after the planet textures have loaded.
-    std::filesystem::create_directory_symlink(original / "textures", empty / "textures");
+    // Prepared shaders present, texture data absent.
+    std::filesystem::create_directories(empty / "build/assets");
+    const auto archive = empty / "build/assets/shaders.bin";
+    auto sources = readShaders(original / "build/assets/shaders.bin");
+    unsigned revision = 0;
+    auto updateArchive = [&]() {
+        writeShaders(archive, sources);
+        std::filesystem::last_write_time(archive, std::filesystem::file_time_type::clock::now() + std::chrono::seconds(++revision));
+    };
+    updateArchive();
     assert(!app.init() && glfwGetCurrentContext() == nullptr);
-    std::filesystem::create_directory_symlink(original / "models", empty / "models");
-    // Scene assets present, meteor shader absent: clean up the whole partial init.
-    std::filesystem::remove(empty / "shaders"); // Remove only the temporary symlink.
-    std::filesystem::create_directory(empty / "shaders");
-    for (const auto& file : std::filesystem::directory_iterator(original / "shaders"))
-    {
-        if (file.path().filename() != "meteor.frag")
-        {
-            std::filesystem::create_symlink(file.path(), empty / "shaders" / file.path().filename());
-        }
-    }
-    assert(!app.init());
-    assert(glfwGetCurrentContext() == nullptr);
+    // Prepared texture data present, shuttle binary absent.
+    std::filesystem::create_directory_symlink(original / "build/assets/textures", empty / "build/assets/textures");
+    std::filesystem::create_directory_symlink(original / "build/assets/models", empty / "build/assets/models");
+    assert(!app.init() && glfwGetCurrentContext() == nullptr);
+    std::filesystem::create_symlink(original / "build/assets/shuttle.bin", empty / "build/assets/shuttle.bin");
+    const auto complete = sources;
+    sources.erase("shaders/meteor.frag"); updateArchive();
+    assert(!app.init() && glfwGetCurrentContext() == nullptr);
     assert(!app.meteors().graphicsReady() && app.meteors().size() == 0);
-    // All earlier resources loaded, particle shader absent: release partial init.
-    std::filesystem::create_symlink(original / "shaders/meteor.frag", empty / "shaders/meteor.frag");
-    std::filesystem::remove(empty / "shaders/particle.frag");
-    assert(!app.init());
-    assert(glfwGetCurrentContext() == nullptr);
+    sources = complete; sources.erase("shaders/particle.frag"); updateArchive();
+    assert(!app.init() && glfwGetCurrentContext() == nullptr);
     assert(!app.particles().graphicsReady() && !app.meteors().graphicsReady());
-    // Missing breakup and post-processing shaders must also clean partial resources.
-    std::filesystem::create_symlink(original / "shaders/particle.frag", empty / "shaders/particle.frag");
-    std::filesystem::remove(empty / "shaders/core.frag");
+    sources = complete; sources.erase("shaders/core.frag"); updateArchive();
     assert(!app.init() && glfwGetCurrentContext() == nullptr && !app.earthBreakup().graphicsReady());
-    std::filesystem::create_symlink(original / "shaders/core.frag", empty / "shaders/core.frag");
-    std::filesystem::remove(empty / "shaders/bright.frag");
+    sources = complete; sources.erase("shaders/bright.frag"); updateArchive();
     assert(!app.init() && glfwGetCurrentContext() == nullptr && !app.earthBreakup().graphicsReady());
     ResourcePaths::setRoot(original);
     std::filesystem::remove_all(empty);

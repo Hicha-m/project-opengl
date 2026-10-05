@@ -253,6 +253,45 @@ uses software rendering and silent audio; desktop audio/GPU forwarding depends
 on the host configuration. The native CMake build provides normal desktop audio.
 The container desktop launch is intended for Linux hosts.
 
+## Startup assets
+
+Make and CMake prepare the shuttle geometry/materials, all 27 image textures,
+and a GLSL source archive during the build, without an OpenGL context or display.
+Generated files live in `build/assets/` beside the runtime resources and are
+included in CMake installations and macOS bundles. Keep that directory with the
+application. Missing, outdated-format or truncated assets fail with a diagnostic;
+rebuild to regenerate them. OBJ parsing and JPG/PNG decoding are never performed
+as a startup fallback. Conversions rerun only when their inputs or converter change.
+
+Textures retain their original resolution and RGBA values, with the original
+vertical flip prepared at build time. Immutable GPU textures are shared within
+a context; the eight shuttle engine materials reuse one texture. GPU upload and
+mipmap generation still happen at startup. Prepared textures occupy about 300 MiB
+uncompressed, trading disk space for faster startup.
+
+On drivers supporting OpenGL 4.1 or `GL_ARB_get_program_binary`, shader programs
+are cached in SDL's per-user preference directory for
+`OpenGLSpaceCinematic/ShaderCache`. Cache identities include the full GLSL sources,
+GPU vendor/renderer and driver/GLSL versions. Corrupt or rejected cache files and
+unwritable cache directories fall back to source compilation; OpenGL 3.3 remains
+supported. The first launch on each GPU/driver still compiles shaders.
+
+```bash
+./project --startup-timings
+# Compare with source compilation:
+./project --startup-timings --no-shader-cache
+# Headless verification:
+SDL_AUDIO_DRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 ./project --smoke-test --software-context --startup-timings
+```
+
+Diagnostics go to stderr and report shuttle binary reading/mesh upload, shader
+loading, texture reading/upload, shared resources, and time from initialization
+to the first completed frame. Diagnostic mode synchronizes that first frame to
+include GPU work. Timings depend on the GPU, audio backend and disk cache.
+The prepared-assets unit test compares every texture pixel and shuttle vertex
+against the source data; the runtime suite checks shared GPU ownership, shader
+cache recovery, compilation/link errors and partial startup cleanup.
+
 ## GitHub Actions (CI/CD)
 
 [The workflow](.github/workflows/cmake-multi-platform.yml) runs on default-branch pushes,
@@ -260,7 +299,7 @@ pull requests, version-tag pushes (`1.0.0` or `v1.0.0`) and manual triggers:
 
 - Debug and Release builds with Clang on Linux and macOS Apple Silicon, plus
   Linux GCC, Linux ARM64, macOS Intel and Windows MSVC builds.
-- Fourteen CPU/audio/resource tests, including executable-relative loading
+- Fifteen CPU/audio/resource tests, including executable-relative loading
   and MP3 music / WAV impact playback from Unicode paths.
 - The complete OpenGL integration suite on Linux with Xvfb and Mesa.
 - Package extraction and scene/audio/rendering startup on every desktop target

@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "platform/StartupProfile.h"
 #include "cinematic/MainSequence.h"
 #include "scene/SceneSetup.h"
 #include <GLFW/glfw3.h>
@@ -32,6 +33,7 @@ bool Application::init()
     {
         return true;
     }
+    StartupProfile::begin(mOptions.startupTimings);
     if (!initOpenGL())
     {
         shutdown();
@@ -165,7 +167,9 @@ void Application::run(std::size_t frameLimit)
         update(static_cast<float>(currentTime - lastTime));
         render();
         showFPS(currentTime);
+        if (StartupProfile::enabled && !StartupProfile::reported) glFinish();
         glfwSwapBuffers(mWindow);
+        StartupProfile::firstFrame();
         lastTime = currentTime;
         if (frameLimit && ++frames >= frameLimit)
         {
@@ -242,6 +246,8 @@ void Application::renderVideo(int width, int height, int fps, double duration,
         }
         mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
         render();
+        if (StartupProfile::enabled && !StartupProfile::reported) glFinish();
+        StartupProfile::firstFrame();
         glReadBuffer(GL_COLOR_ATTACHMENT0);
         glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
         if (glGetError() != GL_NO_ERROR)
