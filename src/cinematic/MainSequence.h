@@ -14,8 +14,8 @@ namespace MainSequence
     constexpr float BombardmentEnd = 62.0f;
     // Configure an empty timeline; scene, camera and shower must outlive its bindings.
     bool build(Timeline& timeline, CinematicCamera& camera, Scene& scene, MeteorShower& shower,
-        SolarSystem* solar = nullptr, const EarthBreakupSystem* breakup = nullptr);
+               SolarSystem* solar = nullptr, const EarthBreakupSystem* breakup = nullptr);
     // Reset controlled state and leave playback stopped. Call timeline.play() to replay.
     void continueEscape(Scene& scene, CinematicCamera& camera, float deltaTime);
     void reset(Timeline& timeline, MeteorShower& shower, MeteorSystem& system);
-}
+} // namespace MainSequence

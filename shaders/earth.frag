@@ -9,8 +9,8 @@ in vec2 TexCoord;
 in vec3 Tangent;
 in vec3 Bitangent;
 
-layout(location=0) out vec4 frag_color;
-layout(location=1) out vec4 bloomSource;
+layout(location = 0) out vec4 frag_color;
+layout(location = 1) out vec4 bloomSource;
 
 // --------------------------------------------------
 // Earth textures
@@ -24,13 +24,11 @@ uniform sampler2D damageMap;
 uniform sampler2D heatMap;
 uniform float destructionLevel;
 
-
 // --------------------------------------------------
 // Camera
 // --------------------------------------------------
 
 uniform vec3 viewPos;
-
 
 // --------------------------------------------------
 // Directional light
@@ -39,7 +37,6 @@ uniform vec3 viewPos;
 uniform vec3 sunDirection;
 uniform vec3 sunColor;
 uniform float sunIntensity;
-
 
 // --------------------------------------------------
 // Point lights
@@ -60,7 +57,6 @@ uniform int pointLightCount;
 
 uniform PointLight pointLights[MAX_POINT_LIGHTS];
 
-
 // --------------------------------------------------
 // Main
 // --------------------------------------------------
@@ -69,37 +65,50 @@ uniform PointLight pointLights[MAX_POINT_LIGHTS];
 // pole singularity, and no world-space/time input that could make cracks slide.
 vec3 crackHash(vec3 cell)
 {
-    return fract(sin(vec3(dot(cell, vec3(127.1, 311.7, 74.7)),
-                          dot(cell, vec3(269.5, 183.3, 246.1)),
-                          dot(cell, vec3(113.5, 271.9, 124.6)))) * 43758.5453);
+    return fract(sin(vec3(dot(cell, vec3(127.1, 311.7, 74.7)), dot(cell, vec3(269.5, 183.3, 246.1)),
+                          dot(cell, vec3(113.5, 271.9, 124.6)))) *
+                 43758.5453);
 }
 
 float crustCracks(float level, float nearbyDamage)
 {
-    if (level <= 0.001) return 0.0;
+    if (level <= 0.001)
+    {
+        return 0.0;
+    }
     float phi = (1.0 - TexCoord.y) * 3.14159265359;
     float theta = TexCoord.x * 6.28318530718;
-    vec3 p = vec3(sin(phi)*cos(theta), cos(phi), sin(phi)*sin(theta)) * 8.0;
+    vec3 p = vec3(sin(phi) * cos(theta), cos(phi), sin(phi) * sin(theta)) * 8.0;
     vec3 cell = floor(p);
     vec3 local = fract(p);
     float nearest = 100.0, second = 100.0;
     vec3 nearestCell = cell;
     for (int z = -1; z <= 1; ++z)
-    for (int y = -1; y <= 1; ++y)
-    for (int x = -1; x <= 1; ++x)
     {
-        vec3 offset = vec3(x, y, z);
-        vec3 candidate = cell + offset;
-        vec3 delta = offset + 0.2 + 0.6 * crackHash(candidate) - local;
-        float distanceSquared = dot(delta, delta);
-        if (distanceSquared < nearest) {
-            second = nearest; nearest = distanceSquared; nearestCell = candidate;
-        } else second = min(second, distanceSquared);
+        for (int y = -1; y <= 1; ++y)
+        {
+            for (int x = -1; x <= 1; ++x)
+            {
+                vec3 offset = vec3(x, y, z);
+                vec3 candidate = cell + offset;
+                vec3 delta = offset + 0.2 + 0.6 * crackHash(candidate) - local;
+                float distanceSquared = dot(delta, delta);
+                if (distanceSquared < nearest)
+                {
+                    second = nearest;
+                    nearest = distanceSquared;
+                    nearestCell = candidate;
+                }
+                else
+                {
+                    second = min(second, distanceSquared);
+                }
+            }
+        }
     }
     float edge = sqrt(second) - sqrt(nearest);
     // Early fractures stay near damaged patches; later the network spreads globally.
-    float coverage = max(smoothstep(0.18, 0.8, level),
-                         nearbyDamage * smoothstep(0.03, 0.22, level));
+    float coverage = max(smoothstep(0.18, 0.8, level), nearbyDamage * smoothstep(0.03, 0.22, level));
     float threshold = crackHash(nearestCell).x * 0.8;
     float activation = smoothstep(threshold, threshold + 0.15, coverage);
     float width = mix(0.008, 0.09, level * level);
@@ -109,7 +118,7 @@ float crustCracks(float level, float nearbyDamage)
 
 void main()
 {
-    bloomSource = vec4(0,0,0,1);
+    bloomSource = vec4(0, 0, 0, 1);
     // ------------------------------------------------
     // TBN
     // ------------------------------------------------
@@ -120,13 +129,11 @@ void main()
 
     mat3 TBN = mat3(T, B, N);
 
-
     // ------------------------------------------------
     // NORMAL MAP
     // ------------------------------------------------
 
-    vec3 normalMapValue =
-        texture(normalMap, TexCoord).rgb;
+    vec3 normalMapValue = texture(normalMap, TexCoord).rgb;
 
     vec3 normalTangent = normalMapValue * 2.0 - 1.0;
 
@@ -136,13 +143,11 @@ void main()
 
     vec3 normal = normalize(TBN * normalTangent);
 
-
     // ------------------------------------------------
     // VIEW
     // ------------------------------------------------
 
     vec3 viewDir = normalize(viewPos - FragPos);
-
 
     // ------------------------------------------------
     // SUN
@@ -162,47 +167,23 @@ void main()
 
     vec3 nightColor = texture(nightMap, TexCoord).rgb;
 
-
-    vec3 color =
-        mix(
-            nightColor,
-            dayColor,
-            dayFactor
-        );
-
+    vec3 color = mix(nightColor, dayColor, dayFactor);
 
     // ------------------------------------------------
     // SUN SPECULAR
     // ------------------------------------------------
 
-    vec3 halfDir =
-        normalize(lightDir + viewDir);
+    vec3 halfDir = normalize(lightDir + viewDir);
 
-    float specAngle =
-        max(
-            dot(normal, halfDir),
-            0.0
-        );
+    float specAngle = max(dot(normal, halfDir), 0.0);
 
-    float specularStrength =
-        pow(specAngle, 64.0);
+    float specularStrength = pow(specAngle, 64.0);
 
-    float specularMapValue =
-        texture(specularMap, TexCoord).r;
+    float specularMapValue = texture(specularMap, TexCoord).r;
 
-    vec3 sunSpecular =
-        sunColor
-        *
-        specularStrength
-        *
-        specularMapValue
-        *
-        dayFactor
-        *
-        sunIntensity;
+    vec3 sunSpecular = sunColor * specularStrength * specularMapValue * dayFactor * sunIntensity;
 
     color += sunSpecular;
-
 
     // ------------------------------------------------
     // POINT LIGHTS
@@ -212,91 +193,38 @@ void main()
     {
         PointLight light = pointLights[i];
 
+        vec3 toLight = light.position - FragPos;
 
-        vec3 toLight =
-            light.position - FragPos;
+        float distance = length(toLight);
 
-        float distance =
-            length(toLight);
-
-        vec3 pointLightDir =
-            normalize(toLight);
-
+        vec3 pointLightDir = normalize(toLight);
 
         // Diffuse
 
-        float NdotPoint =
-            max(
-                dot(normal, pointLightDir),
-                0.0
-            );
-
+        float NdotPoint = max(dot(normal, pointLightDir), 0.0);
 
         // Attenuation
 
         float attenuation =
-            1.0 /
-            (
-                light.constant +
-                light.linear * distance +
-                light.quadratic *
-                distance *
-                distance
-            );
-
+            1.0 / (light.constant + light.linear * distance + light.quadratic * distance * distance);
 
         // Diffuse contribution
 
-        vec3 pointDiffuse =
-            dayColor
-            *
-            NdotPoint
-            *
-            light.color
-            *
-            light.intensity
-            *
-            attenuation;
-
+        vec3 pointDiffuse = dayColor * NdotPoint * light.color * light.intensity * attenuation;
 
         // Specular
 
-        vec3 pointHalfDir =
-            normalize(
-                pointLightDir +
-                viewDir
-            );
+        vec3 pointHalfDir = normalize(pointLightDir + viewDir);
 
-        float pointSpecAngle =
-            max(
-                dot(normal, pointHalfDir),
-                0.0
-            );
+        float pointSpecAngle = max(dot(normal, pointHalfDir), 0.0);
 
-        float pointSpecularStrength =
-            pow(
-                pointSpecAngle,
-                64.0
-            );
-
+        float pointSpecularStrength = pow(pointSpecAngle, 64.0);
 
         vec3 pointSpecular =
-            light.color
-            *
-            pointSpecularStrength
-            *
-            specularMapValue
-            *
-            light.intensity
-            *
-            attenuation;
+            light.color * pointSpecularStrength * specularMapValue * light.intensity * attenuation;
 
-
-        color +=
-            pointDiffuse +
-            pointSpecular;
+        color += pointDiffuse + pointSpecular;
     }
-
 
     // ------------------------------------------------
     // OUTPUT
@@ -308,8 +236,7 @@ void main()
 
     // Emission is added after lighting and scorch: visible even on the night side.
     float heat = max(texture(heatMap, TexCoord).r, 0.0);
-    vec3 thermal = mix(vec3(1.0, 0.025, 0.002), vec3(1.0, 0.28, 0.015),
-        smoothstep(0.05, 0.65, heat));
+    vec3 thermal = mix(vec3(1.0, 0.025, 0.002), vec3(1.0, 0.28, 0.015), smoothstep(0.05, 0.65, heat));
     thermal = mix(thermal, vec3(1.0, 0.8, 0.12), smoothstep(0.65, 1.5, heat));
     thermal = mix(thermal, vec3(1.0, 0.98, 0.85), smoothstep(1.5, 2.8, heat));
     color += thermal * heat;
@@ -322,13 +249,11 @@ void main()
     nearbyDamage = max(nearbyDamage, texture(damageMap, TexCoord + vec2(0.0, 0.015)).r);
     nearbyDamage = max(nearbyDamage, texture(damageMap, TexCoord - vec2(0.0, 0.015)).r);
     float cracks = crustCracks(level, nearbyDamage);
-    vec3 crackColor = mix(vec3(1.0, 0.045, 0.005), vec3(1.0, 0.4, 0.025),
-                         smoothstep(0.15, 0.55, level));
+    vec3 crackColor = mix(vec3(1.0, 0.045, 0.005), vec3(1.0, 0.4, 0.025), smoothstep(0.15, 0.55, level));
     crackColor = mix(crackColor, vec3(1.0, 0.95, 0.7), smoothstep(0.55, 0.95, level));
     // Dark crust and exposed emissive interior, independent of external lights.
     color *= 1.0 - 0.65 * cracks;
     color += crackColor * cracks * mix(0.5, 5.0, level * level);
 
-    frag_color =
-        vec4(color, 1.0);
+    frag_color = vec4(color, 1.0);
 }

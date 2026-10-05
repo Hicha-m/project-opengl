@@ -1,5 +1,8 @@
 # OpenGL Space Cinematic
 
+Pour la présentation au professeur : [trame de deux minutes](docs/PRESENTATION.md)
+et [audit du code et des fichiers inutilisés](docs/AUDIT.md).
+
 Real-time OpenGL project featuring a cinematic journey from an Earth under
 meteor bombardment to a wide shot of the Solar System and the Milky Way.
 
@@ -160,6 +163,12 @@ it cannot confirm what a user hears from a physical speaker.
 `--smoke-test --software-context` uses GLFW 3.4+ and an installed OSMesa library
 for graphical verification on machines without a display or native GPU.
 
+The full graphical test suite also accepts this context:
+
+```bash
+SDL_AUDIO_DRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 build/cmake/test_application --software-context
+```
+
 ### GNU Make
 
 Run these commands from the project directory:
@@ -175,6 +184,42 @@ make clean        # Remove build files and generated executables
 `make test-runtime` needs a working X11 display even though the test window is
 hidden. The build generates converted audio files in `build/music/`; the
 original MP3 files remain unchanged.
+
+## MP4 export
+
+Build the application, then run the exporter with Python 3 and FFmpeg on `PATH`:
+
+```bash
+python3 tools/export_mp4.py
+python3 tools/export_mp4.py --resolution 1080p --fps 60 --crf 18 --preset slow --output exports/film-1080p.mp4
+python3 tools/export_mp4.py --resolution 4k --fps 30 --output exports/film-4k.mp4
+python3 tools/export_mp4.py --resolution 640x360 --duration 5 --output exports/preview.mp4
+```
+
+On Windows, use `python` instead of `python3` if necessary.
+The default export is `exports/cinematic.mp4`, at 1280×720 and 30 fps, with
+H.264 video and AAC audio. It includes the complete music and meteor impact
+sounds with distance attenuation. Frames are simulated at fixed time steps,
+so rendering speed does not alter the film's playback speed or audio timing.
+The renderer captures the HDR/bloom result before swapping buffers.
+
+| Option | Choices / effect |
+| --- | --- |
+| `--resolution` | `720p`, `1080p`, `1440p`, `4k`, or even pixel dimensions such as `1920x1080` |
+| `--fps` | 1–240; default 30, typically 30 or 60 |
+| `--crf` | 0–51; lower means better quality and larger files; default 18 |
+| `--preset` | `ultrafast` through `veryslow`; default `medium`; slower encoding generally makes smaller files |
+| `--duration` | Render the first N seconds; default is the music duration |
+| `--no-audio` | Omit music and impacts |
+| `--output` | Destination `.mp4`; existing files are preserved |
+| `--executable` | Explicit executable path for another build or downloaded package |
+| `--software-context` | Headless OSMesa rendering with GLFW 3.4+ and OSMesa installed |
+
+A working OpenGL context is required. Normal exports use a hidden desktop window;
+on Linux without a display, use Xvfb or the OSMesa option. Higher resolutions and
+frame rates increase rendering time. Export uses a compressed temporary video
+and a temporary audio mix, which are removed on completion or failure.
+The options are command-line settings; there is no graphical export dialog.
 
 ## Docker
 
@@ -263,6 +308,7 @@ must not be presented as mobile builds. See [the mobile assessment](docs/MOBILE.
 | `0` | Restore normal speed |
 | `M` | Mute or unmute audio |
 | `F3` | Switch between cinematic and FPS camera |
+| `F11` | Toggle fullscreen and restore the previous window size and position |
 | `W` / `S` | Move forward or backward in FPS mode |
 | `A` / `D` | Strafe left or right in FPS mode |
 | `Z` / `X` | Move up or down in FPS mode |
@@ -305,9 +351,9 @@ Generated diagnostic captures are written to `/tmp` by the runtime tests.
 
 ## Assets
 
-The project uses the supplied textures, shuttle model and audio files. Paths
-are resolved relative to the project root, so launch the application with
-`make run` or from this directory:
+The project uses the supplied textures, shuttle model and audio files. Resources
+are resolved beside the executable (inside `Resources` for a macOS bundle).
+The GNU Make build can be launched with `make run` or from this directory:
 
 ```bash
 ./project

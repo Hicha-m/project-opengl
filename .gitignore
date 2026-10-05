@@ -7,3 +7,6 @@ project
 # Generated objects, dependency files and test binaries
 /build/
 __pycache__/
+
+# Generated video exports
+/exports/

@@ -14,6 +14,7 @@ public:
     bool begin(int width, int height);
     void finish(bool bloom = true);
     void release();
+
 private:
     bool targets(int width, int height);
     ShaderProgram mBright, mBlur, mComposite;

@@ -1,7 +1,7 @@
 #pragma once
+#include "systems/ParticleSystem.h"
 #include <cstdint>
 #include <random>
-#include "systems/ParticleSystem.h"
 
 struct ParticleBurstConfig
 {
@@ -21,6 +21,7 @@ public:
     void reset() { mRandom.seed(mConfig.seed); }
     bool burst(const glm::vec3& position, const glm::vec3& direction);
     const ParticleBurstConfig& config() const { return mConfig; }
+
 private:
     float random(float minimum, float maximum);
     ParticleSystem& mSystem;

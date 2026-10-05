@@ -1,9 +1,9 @@
 #pragma once
+#include "geometry/SphereCollider.h"
+#include "scene/LightManager.h"
+#include "scene/Transform.h"
 #include <memory>
 #include <vector>
-#include "scene/Transform.h"
-#include "scene/LightManager.h"
-#include "geometry/SphereCollider.h"
 class Mesh;
 class Renderer;
 class Material;
@@ -27,7 +27,7 @@ public:
     ~EarthBreakupSystem();
     EarthBreakupSystem(const EarthBreakupSystem&) = delete;
     EarthBreakupSystem& operator=(const EarthBreakupSystem&) = delete;
-    void update(float dt, float destructionLevel, const Transform& earth);
+    void update(float deltaTime, float destructionLevel, const Transform& earth);
     void reset();
     bool active() const { return mActive; }
     const std::vector<EarthFragment>& fragments() const { return mFragments; }
@@ -38,8 +38,9 @@ public:
     bool initGraphics(const Mesh& earthMesh);
     void releaseGraphics();
     bool graphicsReady() const { return bool(mResources); }
-    void render(Renderer& renderer, Material& crust, LightManager& lights,
-        const glm::mat4& view, const glm::mat4& projection, const glm::vec3& eye);
+    void render(Renderer& renderer, Material& crust, LightManager& lights, const glm::mat4& view,
+                const glm::mat4& projection, const glm::vec3& eye);
+
 private:
     bool mActive = false;
     Transform mEarth;

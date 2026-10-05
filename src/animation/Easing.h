@@ -10,8 +10,5 @@ enum class EasingType
 
 namespace Easing
 {
-    float apply(
-        float t,
-        EasingType type
-    );
+    float apply(float t, EasingType type);
 }

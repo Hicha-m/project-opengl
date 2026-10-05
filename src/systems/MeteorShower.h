@@ -1,15 +1,15 @@
 #pragma once
+#include "systems/MeteorSystem.h"
 #include <cstdint>
 #include <random>
-#include "systems/MeteorSystem.h"
 
 struct MeteorShowerConfig
 {
     float spawnRate = 10.0f; // Instances per second; zero disables emission.
     glm::vec3 origin{0.0f};
-    glm::vec3 spawnHalfExtents{1.0f}; // Axis-aligned box centered on origin.
+    glm::vec3 spawnHalfExtents{1.0f};       // Axis-aligned box centered on origin.
     glm::vec3 direction{0.0f, -1.0f, 0.0f}; // Normalized internally.
-    float spreadRadians = 0.15f; // Cone half-angle, in [0, pi].
+    float spreadRadians = 0.15f;            // Cone half-angle, in [0, pi].
     float minSpeed = 1.0f, maxSpeed = 3.0f;
     float minScale = 0.1f, maxScale = 0.3f;
     float minLifetime = 5.0f, maxLifetime = 10.0f;

@@ -1,8 +1,8 @@
 #pragma once
+#include "geometry/SphereCollider.h"
+#include "scene/LightManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneResources.h"
-#include "scene/LightManager.h"
-#include "geometry/SphereCollider.h"
 
 namespace SceneSetup
 {
@@ -10,4 +10,4 @@ namespace SceneSetup
     void update(Scene& scene, const glm::vec3& cameraPosition);
     // Throws if Earth is missing or its scale is not positive, finite and uniform.
     SphereCollider earthCollider(const Scene& scene, const SceneResources& resources);
-}
+} // namespace SceneSetup

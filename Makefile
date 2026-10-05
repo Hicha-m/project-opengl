@@ -4,7 +4,6 @@ CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -std=c++17
 LDLIBS := $(shell pkg-config --libs glfw3 sdl3) -lGL
 
 TARGET := project
-SCENE ?= src/main
 BUILD_DIR := build
 MUSIC_MP3 := $(BUILD_DIR)/music/cinematic.mp3
 IMPACT_WAV := $(BUILD_DIR)/music/impact.wav
@@ -40,8 +39,10 @@ COMMON_SRC := \
 	src/animation/Timeline.cpp
 
 COMMON_OBJ := $(COMMON_SRC:%.cpp=$(BUILD_DIR)/%.o) $(BUILD_DIR)/third_party/glad/src/gl.o
-MAIN_OBJ := $(BUILD_DIR)/$(SCENE).o
-TEST_NAMES := music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application
+MAIN_OBJ := $(BUILD_DIR)/src/main.o
+TEST_NAMES := resource_paths music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application
+UNIT_TEST_NAMES := $(filter-out application,$(TEST_NAMES))
+UNIT_TEST_BIN := $(UNIT_TEST_NAMES:%=$(BUILD_DIR)/tests/%)
 TEST_OBJ := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%.o)
 TEST_BIN := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%)
 DEPS := $(COMMON_OBJ:.o=.d) $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
@@ -63,6 +64,9 @@ $(TARGET): $(MAIN_OBJ) $(COMMON_OBJ) | $(MUSIC_MP3) $(IMPACT_WAV)
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+# Tests use assert(), including operations with side effects.
+$(TEST_OBJ): CXXFLAGS += -UNDEBUG
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)

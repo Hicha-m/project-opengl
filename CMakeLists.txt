@@ -159,6 +159,7 @@ install(DIRECTORY shaders textures models DESTINATION "${RESOURCE_DESTINATION}")
 install(FILES "${RUNTIME_DIR}/build/music/cinematic.mp3" "${RUNTIME_DIR}/build/music/impact.wav"
     DESTINATION "${RESOURCE_DESTINATION}/build/music")
 install(FILES README.md DESTINATION .)
+install(FILES tools/export_mp4.py DESTINATION tools)
 install(DIRECTORY third_party/ DESTINATION licenses
     FILES_MATCHING PATTERN "*.txt" PATTERN "*.md" PATTERN "stb_image.h")
 

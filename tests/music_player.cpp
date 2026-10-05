@@ -1,38 +1,46 @@
+#include "audio/MusicPlayer.h"
+#include "cinematic/MainSequence.h"
 #include <cassert>
 #include <chrono>
-#include <thread>
 #include <iostream>
 #include <filesystem>
 #include <fstream>
 #include <limits>
-#include "audio/MusicPlayer.h"
-#include "cinematic/MainSequence.h"
+#include <thread>
 int main() {
     MusicPlayer music;
     assert(music.load("build/music/cinematic.mp3"));
     assert(music.ready() && !music.running() && music.position()==0);
     assert(std::abs(music.duration()-MainSequence::Duration)<0.001f);
     assert(music.loadImpact("build/music/impact.wav"));
-    assert(music.restart()); float previous=0;
-    for(int i=0;i<10;++i) {
+    assert(music.restart());
+    float previous = 0;
+    for (int i = 0; i < 10; ++i)
+    {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        const float time=music.position(); assert(time>=previous && time<2); previous=time;
+        const float time = music.position();
+        assert(time >= previous && time < 2);
+        previous = time;
     }
-    assert(previous>0);
-    std::vector<MeteorImpact> impacts={{{0,0,0},{0,1,0},{0,-16,0},0.8f}};
-    music.playImpacts(impacts,{0,0,30},1);
-    assert(music.impactPlayCount()==1 && music.position()>=previous);
-    music.playImpacts(impacts,{0,0,30},1.05f); assert(music.impactPlayCount()==1);
-    music.playImpacts(impacts,{0,0,30},1.2f); assert(music.impactPlayCount()==2);
-    music.setMuted(true); assert(music.running());
-    assert(music.restart() && music.position()<0.2f);
-    assert(music.impactPlayCount()==0);
+    assert(previous > 0);
+    std::vector<MeteorImpact> impacts = {{{0, 0, 0}, {0, 1, 0}, {0, -16, 0}, 0.8f}};
+    music.playImpacts(impacts, {0, 0, 30}, 1);
+    assert(music.impactPlayCount() == 1 && music.position() >= previous);
+    music.playImpacts(impacts, {0, 0, 30}, 1.05f);
+    assert(music.impactPlayCount() == 1);
+    music.playImpacts(impacts, {0, 0, 30}, 1.2f);
+    assert(music.impactPlayCount() == 2);
+    music.setMuted(true);
+    assert(music.running());
+    assert(music.restart() && music.position() < 0.2f);
+    assert(music.impactPlayCount() == 0);
     music.setMuted(false);
     music.setPaused(true);
-    assert(music.seek(30)); const float pausedAt=music.position();
+    assert(music.seek(30));
+    const float pausedAt = music.position();
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    assert(music.position()==pausedAt && std::abs(pausedAt-30)<0.001f);
-    assert(music.impactPlayCount()==0);
+    assert(music.position() == pausedAt && std::abs(pausedAt - 30) < 0.001f);
+    assert(music.impactPlayCount() == 0);
     assert(music.setPlaybackRate(4) && !music.setPlaybackRate(0) && !music.setPlaybackRate(1000));
     music.setPaused(false);
     std::this_thread::sleep_for(std::chrono::milliseconds(150));

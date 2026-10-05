@@ -1,8 +1,8 @@
+#include "systems/MeteorSystem.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include "systems/MeteorSystem.h"
 
 static bool near(const glm::vec3& a, const glm::vec3& b)
 {
@@ -31,7 +31,10 @@ int main()
     assert(system.meteors()[0].lifetime == 0.5f);
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const float inf = std::numeric_limits<float>::infinity();
-    for (float dt : {0.0f, -1.0f, nan, inf}) system.update(dt);
+    for (float dt : {0.0f, -1.0f, nan, inf})
+    {
+        system.update(dt);
+    }
     assert(system.meteors()[0].lifetime == 0.5f);
     system.update(0.5f); // Expiry at exactly zero; remaining instance keeps its state.
     assert(system.size() == 1);
@@ -41,7 +44,9 @@ int main()
     system.update(1);
 
     for (float lifetime : {0.0f, -1.0f, nan, inf})
+    {
         assert(!system.spawn(second, {0, 0, 0}, lifetime));
+    }
     assert(!system.spawn(second, {nan, 0, 0}, 1));
     second.scale.x = 0;
     assert(!system.spawn(second, {0, 0, 0}, 1));

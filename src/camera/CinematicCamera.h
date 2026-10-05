@@ -1,23 +1,24 @@
 #pragma once
 
-#include "camera/Camera.h"
 #include "animation/AnimationTrack.h"
+#include "camera/Camera.h"
 
 class CinematicCamera : public Camera
 {
 public:
-
     CinematicCamera();
 
     void update(float time);
-    void setPose(const glm::vec3& eye, const glm::vec3& target) { mPosition=eye; mTargetPos=target; updateVectors(); }
+    void setPose(const glm::vec3& eye, const glm::vec3& target)
+    {
+        mPosition = eye;
+        mTargetPos = target;
+        updateVectors();
+    }
     const glm::vec3& target() const { return mTargetPos; }
-    void setOrbitOffset(const glm::vec3& offset) { mOrbitOffset=offset; }
+    void setOrbitOffset(const glm::vec3& offset) { mOrbitOffset = offset; }
 
-
-    // ------------------------------------------------
     // Tracks
-    // ------------------------------------------------
 
     AnimationTrack<glm::vec3>& positionTrack();
 
@@ -25,10 +26,7 @@ public:
 
     AnimationTrack<float>& fovTrack();
 
-
-    // ------------------------------------------------
     // Orbit cinématique
-    // ------------------------------------------------
 
     void enableOrbit(bool enabled);
 
@@ -40,38 +38,25 @@ public:
 
     AnimationTrack<glm::vec3>& orbitTargetTrack();
 
-
 private:
+    AnimationTrack<glm::vec3> mPositionTrack;
 
-    AnimationTrack<glm::vec3>
-        mPositionTrack;
+    AnimationTrack<glm::vec3> mTargetTrack;
 
-    AnimationTrack<glm::vec3>
-        mTargetTrack;
+    AnimationTrack<float> mFovTrack;
 
-    AnimationTrack<float>
-        mFovTrack;
-
-
-    // ------------------------------------------------
     // Orbit
-    // ------------------------------------------------
 
     bool mOrbitEnabled = false;
     glm::vec3 mOrbitOffset{0};
 
-    AnimationTrack<float>
-        mOrbitRadiusTrack;
+    AnimationTrack<float> mOrbitRadiusTrack;
 
-    AnimationTrack<float>
-        mOrbitYawTrack;
+    AnimationTrack<float> mOrbitYawTrack;
 
-    AnimationTrack<float>
-        mOrbitPitchTrack;
+    AnimationTrack<float> mOrbitPitchTrack;
 
-    AnimationTrack<glm::vec3>
-        mOrbitTargetTrack;
-
+    AnimationTrack<glm::vec3> mOrbitTargetTrack;
 
     void updateOrbit(float time);
 

@@ -1,9 +1,9 @@
+#include "systems/MeteorSystem.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
-#include "systems/MeteorSystem.h"
 
 static bool near(const glm::vec3& a, const glm::vec3& b)
 {
@@ -51,7 +51,7 @@ int main()
 
     spawn({-5, 3.01f, 0}, {10, 0, 0});
     spawn({-5, 0, 0}, {-10, 0, 0}); // Moving away.
-    spawn({-5, 0, 0}, {0, 0, 0}); // Stationary outside.
+    spawn({-5, 0, 0}, {0, 0, 0});   // Stationary outside.
     system.update(1, sphere);
     assert(system.size() == 3 && system.impacts().empty());
     system.clear();
@@ -77,7 +77,10 @@ int main()
     spawn({10, 10, 10}, {0, 0, 0});
     system.update(1, sphere);
     assert(system.size() == 1 && system.impacts().size() == 3);
-    for (const auto& impact : system.impacts()) check(impact);
+    for (const auto& impact : system.impacts())
+    {
+        check(impact);
+    }
     assert(system.impacts()[0].meteorScale == 0.5f);
     assert(system.impacts()[1].meteorScale == 1.5f);
     assert(near(system.impacts()[1].position, {0, 2, 0}));
@@ -100,8 +103,8 @@ int main()
     system.update(1, translated);
     assert(system.impacts().size() == 1 && system.size() == 0);
     assert(near(system.impacts()[0].position, {30, 60, -10}));
-    for (float dt : {0.0f, -1.0f, std::numeric_limits<float>::quiet_NaN(),
-        std::numeric_limits<float>::infinity()})
+    for (float dt :
+         {0.0f, -1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()})
     {
         spawn({-5, 0, 0}, {10, 0, 0});
         system.update(dt, sphere);
@@ -109,12 +112,18 @@ int main()
         system.clear();
     }
     for (auto invalid : {SphereCollider{{0, 0, 0}, 0}, SphereCollider{{0, 0, 0}, -1},
-        SphereCollider{{std::numeric_limits<float>::quiet_NaN(), 0, 0}, 1}})
+                         SphereCollider{{std::numeric_limits<float>::quiet_NaN(), 0, 0}, 1}})
     {
         spawn({-5, 0, 0}, {10, 0, 0});
         bool rejected = false;
-        try { system.update(1, invalid); }
-        catch (const std::invalid_argument&) { rejected = true; }
+        try
+        {
+            system.update(1, invalid);
+        }
+        catch (const std::invalid_argument&)
+        {
+            rejected = true;
+        }
         assert(rejected && system.size() == 1 && system.impacts().empty());
         system.clear();
     }

@@ -1,7 +1,7 @@
 #pragma once
-#include <vector>
 #include "systems/ImpactLight.h"
 #include "systems/MeteorImpact.h"
+#include <vector>
 
 class LightManager;
 

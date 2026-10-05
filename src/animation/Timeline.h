@@ -1,8 +1,9 @@
 #pragma once
+#include "animation/TimelineTrack.h"
 #include <memory>
 #include <vector>
-#include "animation/TimelineTrack.h"
 
+// Shared playback time: updates animation tracks and scheduled events.
 class Timeline
 {
 public:
@@ -16,6 +17,7 @@ public:
     void setDuration(float duration);
     float getDuration() const { return mDuration; }
     void addTrack(std::unique_ptr<TimelineTrack> track);
+
 private:
     float mCurrentTime = 0;
     float mDuration = 0; // zero means unlimited

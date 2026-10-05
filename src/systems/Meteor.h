@@ -10,5 +10,5 @@ struct Meteor
     Transform transform;
     glm::vec3 velocity{0.0f};
     float lifetime = 0.0f; // Remaining seconds.
-    MeteorId id = 0; // Stable until removal; zero is not assigned by MeteorSystem.
+    MeteorId id = 0;       // Stable until removal; zero is not assigned by MeteorSystem.
 };

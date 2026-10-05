@@ -9,19 +9,21 @@ namespace
     {
         return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
     }
-}
+} // namespace
 
 void ImpactLightSystem::consume(const std::vector<MeteorImpact>& impacts)
 {
     for (const auto& impact : impacts)
     {
         const double normalLength = glm::length(glm::dvec3(impact.normal));
-        if (!finite(impact.position) || !finite(impact.normal) || !finite(impact.velocity)
-            || normalLength == 0 || !std::isfinite(impact.meteorScale) || impact.meteorScale <= 0)
+        if (!finite(impact.position) || !finite(impact.normal) || !finite(impact.velocity) ||
+            normalLength == 0 || !std::isfinite(impact.meteorScale) || impact.meteorScale <= 0)
+        {
             continue;
+        }
         ImpactLight light;
-        light.position = impact.position
-            + glm::vec3(glm::dvec3(impact.normal) / normalLength) * SurfaceOffset;
+        light.position =
+            impact.position + glm::vec3(glm::dvec3(impact.normal) / normalLength) * SurfaceOffset;
         const double strength = glm::length(glm::dvec3(impact.velocity)) * impact.meteorScale * 3.0;
         light.initialIntensity = float(std::clamp(strength, 2.0, 30.0));
         light.intensity = light.initialIntensity;
@@ -31,7 +33,10 @@ void ImpactLightSystem::consume(const std::vector<MeteorImpact>& impacts)
 
 void ImpactLightSystem::update(float deltaTime)
 {
-    if (!std::isfinite(deltaTime) || deltaTime < 0) return;
+    if (!std::isfinite(deltaTime) || deltaTime < 0)
+    {
+        return;
+    }
     for (auto& light : mLights)
     {
         if (light.fresh)
@@ -44,7 +49,8 @@ void ImpactLightSystem::update(float deltaTime)
         light.intensity = light.initialIntensity * remaining * remaining;
     }
     mLights.erase(std::remove_if(mLights.begin(), mLights.end(),
-        [](const ImpactLight& light) { return light.age >= light.lifetime; }), mLights.end());
+                                 [](const ImpactLight& light) { return light.age >= light.lifetime; }),
+                  mLights.end());
 }
 
 void ImpactLightSystem::clear()
