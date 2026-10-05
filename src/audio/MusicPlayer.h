@@ -19,6 +19,7 @@ public:
     bool setPlaybackRate(float rate);
     bool loadImpact(const std::string& wavPath);
     void playImpacts(const std::vector<MeteorImpact>& impacts,const glm::vec3& listener,float time);
+    static float impactGain(const std::vector<MeteorImpact>& impacts, const glm::vec3& listener);
     unsigned impactPlayCount() const { return mImpactPlayCount; }
     void release();
     bool ready() const { return mStream!=nullptr; }

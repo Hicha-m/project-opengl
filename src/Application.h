@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <cstddef>
+#include <functional>
 #include "scene/SceneResources.h"
 #include "scene/Scene.h"
 #include "scene/LightManager.h"
@@ -40,6 +41,9 @@ public:
 
     bool init();
     void run(std::size_t frameLimit = 0); // zero: run until window closes
+    void renderVideo(int width, int height, int fps, double duration,
+        const std::function<void(const unsigned char*, std::size_t)>& writeFrame,
+        const std::function<void(float, float)>& writeImpact);
     void shutdown();
     void restartSequence();
     void seekSequence(float seconds);
@@ -68,6 +72,8 @@ private:
     static void keyCallback(GLFWwindow*, int, int, int, int);
     static void framebufferCallback(GLFWwindow*, int, int);
 
+    std::function<void(float, float)> mExportImpact;
+    float mExportLastImpact = -1;
     ApplicationOptions mOptions;
     GLFWwindow* mWindow = nullptr;
     bool mGLFWInitialized = false;

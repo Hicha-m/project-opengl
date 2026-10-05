@@ -173,6 +173,42 @@ make clean        # Remove build files and generated executables
 hidden. The build generates converted audio files in `build/music/`; the
 original MP3 files remain unchanged.
 
+## MP4 export
+
+Build the application, then run the exporter with Python 3 and FFmpeg on `PATH`:
+
+```bash
+python3 tools/export_mp4.py
+python3 tools/export_mp4.py --resolution 1080p --fps 60 --crf 18 --preset slow --output exports/film-1080p.mp4
+python3 tools/export_mp4.py --resolution 4k --fps 30 --output exports/film-4k.mp4
+python3 tools/export_mp4.py --resolution 640x360 --duration 5 --output exports/preview.mp4
+```
+
+On Windows, use `python` instead of `python3` if necessary.
+The default export is `exports/cinematic.mp4`, at 1280×720 and 30 fps, with
+H.264 video and AAC audio. It includes the complete music and meteor impact
+sounds with distance attenuation. Frames are simulated at fixed time steps,
+so rendering speed does not alter the film's playback speed or audio timing.
+The renderer captures the HDR/bloom result before swapping buffers.
+
+| Option | Choices / effect |
+| --- | --- |
+| `--resolution` | `720p`, `1080p`, `1440p`, `4k`, or even pixel dimensions such as `1920x1080` |
+| `--fps` | 1–240; default 30, typically 30 or 60 |
+| `--crf` | 0–51; lower means better quality and larger files; default 18 |
+| `--preset` | `ultrafast` through `veryslow`; default `medium`; slower encoding generally makes smaller files |
+| `--duration` | Render the first N seconds; default is the music duration |
+| `--no-audio` | Omit music and impacts |
+| `--output` | Destination `.mp4`; existing files are preserved |
+| `--executable` | Explicit executable path for another build or downloaded package |
+| `--software-context` | Headless OSMesa rendering with GLFW 3.4+ and OSMesa installed |
+
+A working OpenGL context is required. Normal exports use a hidden desktop window;
+on Linux without a display, use Xvfb or the OSMesa option. Higher resolutions and
+frame rates increase rendering time. Export uses a compressed temporary video
+and a temporary audio mix, which are removed on completion or failure.
+The options are command-line settings; there is no graphical export dialog.
+
 ## Docker
 
 Build a Linux image from the project directory:

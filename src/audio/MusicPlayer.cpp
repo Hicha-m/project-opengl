@@ -105,12 +105,7 @@ bool MusicPlayer::loadImpact(const std::string& path) {
 }
 void MusicPlayer::playImpacts(const std::vector<MeteorImpact>& impacts,const glm::vec3& listener,float time) {
     if(!mRunning || mPaused || mImpactPCM.empty() || impacts.empty() || time-mLastImpactTime<0.12f) return;
-    float gain=0;
-    for(const auto& impact:impacts) {
-        const float distance=glm::distance(listener,impact.position);
-        const float strength=std::clamp(impact.meteorScale*glm::length(impact.velocity)/14.0f,0.2f,1.0f);
-        gain=std::max(gain,0.25f*(0.25f+0.4f*strength)/(1+distance*distance/(180*180)));
-    }
+    const float gain=impactGain(impacts,listener);
     if(gain<0.01f) return;
     // Bounded overlapping voices; mix the strongest contact of each frame.
     unsigned selected=mNextVoice;
@@ -121,4 +116,14 @@ void MusicPlayer::playImpacts(const std::vector<MeteorImpact>& impacts,const glm
         && SDL_FlushAudioStream(voice.stream)) {
         mLastImpactTime=time; ++mImpactPlayCount; mNextVoice=(selected+1)%mVoices.size();
     }
+}
+
+float MusicPlayer::impactGain(const std::vector<MeteorImpact>& impacts, const glm::vec3& listener) {
+    float gain=0;
+    for(const auto& impact:impacts) {
+        const float distance=glm::distance(listener,impact.position);
+        const float strength=std::clamp(impact.meteorScale*glm::length(impact.velocity)/14.0f,0.2f,1.0f);
+        gain=std::max(gain,0.25f*(0.25f+0.4f*strength)/(1+distance*distance/(180*180)));
+    }
+    return gain;
 }

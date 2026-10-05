@@ -5,6 +5,7 @@
 #include <sstream>
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
 #include "scene/SceneSetup.h"
 #include "cinematic/MainSequence.h"
 
@@ -144,6 +145,71 @@ void Application::run(std::size_t frameLimit)
     }
 }
 
+void Application::renderVideo(int width, int height, int fps, double duration,
+    const std::function<void(const unsigned char*, std::size_t)>& writeFrame,
+    const std::function<void(float, float)>& writeImpact)
+{
+    if (!mInitialized || width <= 0 || height <= 0 || fps <= 0
+        || !std::isfinite(duration) || duration <= 0)
+        throw std::runtime_error("Invalid video export settings");
+    glfwSetKeyCallback(mWindow, nullptr);
+    glfwSetFramebufferSizeCallback(mWindow, nullptr);
+    mMusic.setPaused(true);
+    mTimeline.setDuration(static_cast<float>(duration));
+    resetSequenceState();
+    mFPSMode = mWireframe = false;
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    // Capture an offscreen target, independent of desktop size and HiDPI scaling.
+    struct CaptureTarget {
+        GLuint framebuffer = 0, texture = 0;
+        ~CaptureTarget() {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glDeleteFramebuffers(1, &framebuffer);
+            glDeleteTextures(1, &texture);
+        }
+    } capture;
+    GLint maxTextureSize;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+    if (width > maxTextureSize || height > maxTextureSize)
+        throw std::runtime_error("Export resolution exceeds GPU texture limits");
+    glGenTextures(1, &capture.texture);
+    glBindTexture(GL_TEXTURE_2D, capture.texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glGenFramebuffers(1, &capture.framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, capture.framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, capture.texture, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        throw std::runtime_error("Cannot allocate video capture framebuffer");
+    onFramebufferSize(width, height);
+    glfwSwapInterval(0);
+    mExportImpact = writeImpact;
+    mExportLastImpact = -1;
+    std::vector<unsigned char> pixels(std::size_t(width) * height * 3);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    const std::size_t count = static_cast<std::size_t>(std::ceil(duration * fps));
+    double simulated = 0;
+    for (std::size_t frame = 0; frame < count; ++frame) {
+        glfwPollEvents();
+        if (glfwWindowShouldClose(mWindow)) throw std::runtime_error("Video export cancelled");
+        const double target = double(frame) / fps;
+        while (simulated < target) {
+            const float step = static_cast<float>(std::min(1.0 / 60, target - simulated));
+            simulate(step, false);
+            simulated += step;
+        }
+        mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
+        render();
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+        if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Video frame capture failed");
+        writeFrame(pixels.data(), pixels.size());
+        if (frame % fps == 0) std::cerr << "Export: " << frame / fps << " / " << duration << " s\n";
+    }
+    mExportImpact = {};
+}
+
 void Application::update(float deltaTime)
 {
     updateInput(deltaTime);
@@ -182,6 +248,13 @@ void Application::simulate(float deltaTime,bool audible)
     if (!hittingCore) {
         mImpactParticleEmitter.consume(mMeteorSystem.impacts());
         mImpactLightSystem.consume(mMeteorSystem.impacts());
+        if (mExportImpact && mTimeline.getTime() - mExportLastImpact >= 0.12f) {
+            const float gain = MusicPlayer::impactGain(mMeteorSystem.impacts(), mCinematicCamera.getPosition());
+            if (gain >= 0.01f) {
+                mExportImpact(mTimeline.getTime(), gain);
+                mExportLastImpact = mTimeline.getTime();
+            }
+        }
         if(audible) mMusic.playImpacts(mMeteorSystem.impacts(),mFPSMode?mFPSCamera.getPosition():mCinematicCamera.getPosition(),mTimeline.getTime());
     }
     mImpactLightSystem.update(deltaTime);
