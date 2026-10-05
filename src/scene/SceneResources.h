@@ -17,7 +17,7 @@ struct ShuttlePart {
 // Scene materials and meshes borrow these resources; do not copy or move them.
 struct SceneResources
 {
-    ShaderProgram shuttleShader;
+    ShaderProgram shuttleShader, exhaustShader;
     Mesh shuttleSource;
     std::vector<std::unique_ptr<ShuttlePart>> shuttleParts;
     ShaderProgram earthShader, cloudShader, sunShader, starShader, planetShader, ringShader, orbitShader;

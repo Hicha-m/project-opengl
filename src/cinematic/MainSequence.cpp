@@ -31,6 +31,9 @@ namespace {
             for(auto& object:mScene.objects) if(isShuttle(object)) {
                 object.transform.position=position; object.transform.rotation=rotation;
                 object.transform.scale=glm::vec3(6); object.visible=time>=30;
+                // Timeline time keeps exhaust stable across pause, seek and replay.
+                if(object.material.intUniforms["isExhaust"]!=0)
+                    object.material.setFloat("exhaustTime",time);
             }
             // Keep the departing ship in the upper half of the Earth shot.
             const auto* earth=mScene.findObject("Earth");

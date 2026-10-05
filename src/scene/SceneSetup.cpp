@@ -23,6 +23,7 @@ namespace
     bool loadShuttle(Scene& scene, SceneResources& r)
     {
         if (!loadShader(r.shuttleShader,"shaders/shuttle.vert","shaders/shuttle.frag")
+            || !loadShader(r.exhaustShader,"shaders/shuttle.vert","shaders/exhaust.frag")
             || !r.shuttleSource.loadOBJ("models/shuttle/shuttle.obj")) return false;
         struct Surface { glm::vec3 color{0.8f}; float metal=0, rough=0.7f; std::string diffuse,normal; };
         std::unordered_map<std::string,Surface> surfaces;
@@ -53,8 +54,23 @@ namespace
             for(auto& v:subset) v.position=(v.position-center)/size;
             part->mesh.setVertices(subset);
             const auto surface=surfaces[section.material];
-            part->material=Material(&r.shuttleShader);
+            const bool exhaust=surface.diffuse=="Untitled101_20260818133021.png";
+            auto* shader=exhaust?&r.exhaustShader:&r.shuttleShader;
+            part->material=Material(shader);
             auto& material=part->material;
+            material.setInt("isExhaust",exhaust);
+            if(exhaust) {
+                float anchor=subset.front().position.z;
+                for(const auto& v:subset) anchor=std::min(anchor,v.position.z);
+                material.setFloat("exhaustAnchor",anchor);
+                material.setFloat("exhaustTime",0);
+                // Four crossing planes per engine share the same animation phase.
+                material.setFloat("exhaustPhase",section.material=="Untitled101_20260818133021"
+                    || section.material=="Untitled101_20260818133021.002"
+                    || section.material=="Untitled101_20260818133021.003"
+                    || section.material=="Untitled101_20260818133021.004"?0.0f:1.7f);
+                material.blending=true; material.additiveBlending=true; material.depthWrite=false;
+            }
             if(!surface.diffuse.empty()) {
                 if(!part->diffuse.loadTexture("models/shuttle/"+surface.diffuse,true)) return false;
                 material.addTexture("surfaceMap",&part->diffuse,0);
@@ -68,7 +84,7 @@ namespace
             material.setVec3("baseColor",surface.color);
             material.setVec3("sunPosition",SolarSystem::SunCenter);
             material.setFloat("metallic",surface.metal); material.setFloat("roughness",surface.rough);
-            SceneObject object(part->name,&part->mesh,&r.shuttleShader);
+            SceneObject object(part->name,&part->mesh,shader);
             object.material=material; object.visible=false;
             scene.addObject(object); r.shuttleParts.push_back(std::move(part));
         }

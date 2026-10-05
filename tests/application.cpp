@@ -653,7 +653,64 @@ static void checkSolarViews()
     assert(glGetError()==GL_NO_ERROR);
 }
 
-int main()
+static void checkShuttle(const Scene& source, SceneResources& resources)
+{
+    Renderer renderer;
+    LightManager lights;
+    HDRPipeline hdr; assert(hdr.init(640,480));
+    const auto projection=glm::ortho(-5.0f,5.0f,-3.75f,3.75f,0.1f,100.0f);
+    // A known flat surface exposes camera fill and highlights on the night side.
+    Mesh panel;
+    std::vector<Vertex> vertices;
+    for(const auto& p:std::vector<glm::vec3>{{-2,-2,0},{2,-2,0},{2,2,0},
+        {-2,-2,0},{2,2,0},{-2,2,0}}) {
+        Vertex v{}; v.position=p; v.normal={0,0,1}; vertices.push_back(v);
+    }
+    panel.setVertices(vertices);
+    Material hull(&resources.shuttleShader);
+    hull.setInt("hasSurfaceMap",0); hull.setInt("hasNormalMap",0); hull.setInt("isExhaust",0);
+    hull.setFloat("metallic",0);
+    hull.setVec3("baseColor",glm::vec3(0.6f)); hull.setFloat("roughness",0.7f);
+    auto panelDraw=[&](float sunZ) {
+        hull.setVec3("sunPosition",{0,0,sunZ});
+        assert(hdr.begin(640,480));
+        renderer.renderMesh(panel,hull,Transform{},lights,
+            glm::lookAt(glm::vec3(0,0,12),glm::vec3(0),glm::vec3(0,1,0)),projection,{0,0,12});
+        hdr.finish(false); return pixels();
+    };
+    auto brightness=[](const std::vector<unsigned char>& image) {
+        double sum=0; for(auto value:image) sum+=value; return sum;
+    };
+    const auto dark=panelDraw(-100), day=panelDraw(100);
+    const std::size_t center=(240*640+320)*3;
+    assert(int(day[center])+day[center+1]+day[center+2]
+        >10*(int(dark[center])+dark[center+1]+dark[center+2]));
+
+    Scene ship;
+    for(const auto& object:source.objects) if(object.name=="Shuttle" || object.name.rfind("Shuttle/",0)==0) {
+        auto copy=object; copy.visible=true; copy.transform=Transform{};
+        copy.transform.scale=glm::vec3(6); ship.addObject(copy);
+    }
+    const glm::vec3 eye(7,3,8);
+    const auto view=glm::lookAt(eye,glm::vec3(0),glm::vec3(0,1,0));
+    auto draw=[&](float time,bool bloom) {
+        for(auto& object:ship.objects) object.material.setFloat("exhaustTime",time);
+        assert(hdr.begin(640,480)); renderer.render(ship,lights,view,projection,eye);
+        hdr.finish(bloom); return pixels();
+    };
+    const auto first=draw(40,true); capture("/tmp/shuttle-propulsion-40.ppm",640,480);
+    const auto moved=draw(40.13f,true); capture("/tmp/shuttle-propulsion-moving.ppm",640,480);
+    assert(first!=moved); assert(first==draw(40,true)); // Animation and deterministic replay.
+    const auto withoutBloom=draw(40,false);
+    assert(brightness(first)>brightness(withoutBloom));
+    for(auto& object:ship.objects) if(object.material.intUniforms.at("isExhaust")) object.visible=false;
+    const auto hullOnly=draw(40,true);
+    assert(brightness(first)>brightness(hullOnly));
+    assert(hullOnly==draw(40,false)); // The hull does not emit bloom.
+    assert(glGetError()==GL_NO_ERROR);
+}
+
+int main(int argc, char** argv)
 {
     ApplicationOptions options;
     options.fullscreen = false;
@@ -665,6 +722,13 @@ int main()
     app.restartSequence(); // Safe before initialization.
     assert(app.init());
     assert(app.init()); // Does not duplicate the scene or create another window.
+    if(argc==2 && std::string(argv[1])=="--shuttle-only") {
+        Scene scene; SceneResources resources; LightManager lights;
+        assert(SceneSetup::build(scene,lights,resources));
+        checkShuttle(scene,resources);
+        std::cout<<"Shuttle lighting and propulsion checks passed\n";
+        return 0;
+    }
     app.setPlaybackRate(100); assert(app.playbackRate()==8);
     app.setPlaybackRate(0.01f); assert(app.playbackRate()==0.25f);
     app.setPlaybackRate(1);
@@ -746,6 +810,7 @@ int main()
         assert(resources.shuttleSource.vertices().size()==33957);
         assert(resources.shuttleSource.sections().size()==13);
         assert(resources.shuttleParts.size()==13);
+        checkShuttle(scene,resources);
         // Polygon triangulation, absent UVs/normals and relative indices.
         { std::ofstream obj("/tmp/mesh-parser.obj");
           obj<<"v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nusemtl hull\nf -4 -3 -2 -1\n"; }

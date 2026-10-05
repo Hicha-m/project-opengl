@@ -46,6 +46,7 @@ public:
     // --------------------------------------------------
 
     bool blending = false;
+    bool additiveBlending = false;
 
     bool depthLEqual = false;
 

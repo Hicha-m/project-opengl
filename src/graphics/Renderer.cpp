@@ -78,7 +78,7 @@ void Renderer::renderMesh(
 
         glBlendFunc(
             GL_SRC_ALPHA,
-            GL_ONE_MINUS_SRC_ALPHA
+            material.additiveBlending ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA
         );
     }
     else
