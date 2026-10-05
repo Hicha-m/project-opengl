@@ -3,7 +3,6 @@
 //-----------------------------------------------------------------------------
 #include "graphics/ShaderProgram.h"
 #include "assets/PreparedAssets.h"
-#include "graphics/ShaderBinaryCache.h"
 #include "platform/ResourcePaths.h"
 #include "platform/StartupProfile.h"
 #include <iostream>
@@ -41,7 +40,6 @@ ShaderProgram::~ShaderProgram()
 bool ShaderProgram::loadShaders(const char* vsFilename, const char* fsFilename)
 {
     StartupProfile::Timer timer(StartupProfile::Shaders);
-    mLoadedFromCache = false;
     try
     {
         // Read the archive once per resource root; never retain failed reads.
@@ -70,7 +68,6 @@ bool ShaderProgram::loadShaders(const char* vsFilename, const char* fsFilename)
         {
             throw std::runtime_error("Empty shader source");
         }
-        ShaderBinaryCache cache(vertex, fragment);
         const GLuint program = glCreateProgram();
         if (!program)
         {
@@ -85,15 +82,7 @@ bool ShaderProgram::loadShaders(const char* vsFilename, const char* fsFilename)
             mHandle = program;
             mUniformLocations.clear();
         };
-        if (cache.load(program))
-        {
-            commit();
-            mLoadedFromCache = true;
-            ++StartupProfile::shaderHits;
-            return true;
-        }
         ++StartupProfile::shaderCompiles;
-        cache.prepare(program);
         const GLuint vs = glCreateShader(GL_VERTEX_SHADER), fs = glCreateShader(GL_FRAGMENT_SHADER);
         if (!vs || !fs)
         {
@@ -134,7 +123,6 @@ bool ShaderProgram::loadShaders(const char* vsFilename, const char* fsFilename)
             glDeleteProgram(program);
             return false;
         }
-        cache.save(program);
         commit();
         return true;
     }

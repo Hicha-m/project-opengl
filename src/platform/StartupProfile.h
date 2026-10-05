@@ -13,17 +13,16 @@ namespace StartupProfile
         Textures
     };
     inline bool enabled = false;
-    inline bool disableShaderCache = false;
     inline bool reported = false;
     inline Clock::time_point start;
     inline std::array<double, 3> milliseconds{};
-    inline unsigned shaderHits = 0, shaderCompiles = 0, textureHits = 0;
+    inline unsigned shaderCompiles = 0, textureHits = 0;
     inline void begin(bool diagnostic)
     {
         enabled = diagnostic;
         reported = false;
         milliseconds = {};
-        shaderHits = shaderCompiles = textureHits = 0;
+        shaderCompiles = textureHits = 0;
         start = Clock::now();
     }
     struct Timer
@@ -48,8 +47,8 @@ namespace StartupProfile
         }
         reported = true;
         std::cerr << "Startup: shuttle " << milliseconds[Shuttle] << " ms, shaders " << milliseconds[Shaders]
-                  << " ms (" << shaderHits << " cached, " << shaderCompiles << " compiled), textures "
-                  << milliseconds[Textures] << " ms (" << textureHits << " shared), first frame "
+                  << " ms (" << shaderCompiles << " compiled), textures " << milliseconds[Textures] << " ms ("
+                  << textureHits << " shared), first frame "
                   << std::chrono::duration<double, std::milli>(Clock::now() - start).count() << " ms\n";
     }
 } // namespace StartupProfile

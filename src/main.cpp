@@ -1,5 +1,4 @@
 #include "Application.h"
-#include "platform/StartupProfile.h"
 #include "platform/ResourcePaths.h"
 #include <cmath>
 #include <cstdio>
@@ -17,7 +16,7 @@ namespace
 {
     struct CommandLineOptions
     {
-        bool startupTimings = false, noShaderCache = false;
+        bool startupTimings = false;
         bool smokeTest = false;
         bool softwareContext = false;
         bool exportFrames = false;
@@ -41,7 +40,6 @@ namespace
                 return argv[i];
             };
             if (arg == "--startup-timings") options.startupTimings = true;
-            else if (arg == "--no-shader-cache") options.noShaderCache = true;
             else if (arg == "--smoke-test")
             {
                 options.smokeTest = true;
@@ -155,7 +153,6 @@ int main(int argc, char** argv)
         ResourcePaths::root();
         ApplicationOptions options;
         options.startupTimings = command.startupTimings;
-        StartupProfile::disableShaderCache = command.noShaderCache;
         options.softwareContext = command.softwareContext;
         options.width = command.smokeTest ? 640 : command.width;
         options.height = command.smokeTest ? 480 : command.height;

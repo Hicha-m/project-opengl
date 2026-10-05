@@ -35,7 +35,6 @@ add_library(project_core STATIC
     src/camera/CinematicCamera.cpp
     src/graphics/Mesh.cpp
     src/graphics/ShaderProgram.cpp
-    src/graphics/ShaderBinaryCache.cpp
     src/graphics/Texture2D.cpp
     src/graphics/Renderer.cpp
     src/geometry/Sphere.cpp

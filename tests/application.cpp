@@ -1,8 +1,5 @@
 #include "Application.h"
 #include "assets/PreparedAssets.h"
-#include "graphics/ShaderBinaryCache.h"
-#include "platform/StartupProfile.h"
-#include <SDL3/SDL.h>
 #include "cinematic/MainSequence.h"
 #include "platform/ResourcePaths.h"
 #include "scene/SceneSetup.h"
@@ -960,7 +957,7 @@ static void checkSharedTextures(SceneResources& resources)
     glBindTexture(GL_TEXTURE_2D, previous); glActiveTexture(active);
 }
 
-static void checkShaderCache()
+static void checkShaderCompilation()
 {
     const auto original = ResourcePaths::root();
     const auto temporary = std::filesystem::temp_directory_path() /
@@ -971,37 +968,14 @@ static void checkShaderCache()
     const auto archive = temporary / "build/assets/shaders.bin";
     writeShaders(archive, sources);
     ResourcePaths::setRoot(temporary);
-    char* pref = SDL_GetPrefPath("OpenGLSpaceCinematic", "ShaderCache");
-    const auto directory = pref ? std::filesystem::u8path(pref) : std::filesystem::path{};
-    SDL_free(pref);
-    std::vector<std::filesystem::path> existing;
-    if (!directory.empty()) for (const auto& file : std::filesystem::directory_iterator(directory)) existing.push_back(file.path());
     ShaderProgram shader;
-    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
-    std::filesystem::path created;
-    if (!directory.empty()) for (const auto& file : std::filesystem::directory_iterator(directory))
-        if (std::find(existing.begin(), existing.end(), file.path()) == existing.end()) created = file.path();
     assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag"));
-    if (!created.empty()) {
-        assert(shader.loadedFromCache());
-        // Both a truncated cache and a damaged payload must trigger recompilation.
-        std::filesystem::resize_file(created, 8);
-        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
-        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && shader.loadedFromCache());
-        { std::fstream file(created, std::ios::in | std::ios::out | std::ios::binary); file.seekg(-1, std::ios::end); int last = file.get(); file.seekp(-1, std::ios::end); file.put(last ^ 255); }
-        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
-        assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && shader.loadedFromCache());
-    }
-    StartupProfile::disableShaderCache = true;
-    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
-    assert(!ShaderBinaryCache(vertex, fragment).supported());
-    StartupProfile::disableShaderCache = false;
     auto change = [&](const ShaderSources& data, int step) {
         writeShaders(archive, data);
         std::filesystem::last_write_time(archive, std::filesystem::file_time_type::clock::now() + std::chrono::seconds(step));
     };
     sources["shaders/probe.frag"] = fragment + "\n// changed"; change(sources, 1);
-    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && !shader.loadedFromCache());
+    assert(shader.loadShaders("shaders/probe.vert", "shaders/probe.frag"));
     const auto validProgram = shader.getProgram();
     sources["shaders/probe.frag"] = "#version 330 core\ninvalid GLSL"; change(sources, 2);
     assert(!shader.loadShaders("shaders/probe.vert", "shaders/probe.frag") && shader.getProgram() == validProgram);
@@ -1011,7 +985,6 @@ static void checkShaderCache()
     assert(glGetError() == GL_NO_ERROR);
     ResourcePaths::setRoot(original);
     std::filesystem::remove_all(temporary);
-    if (!created.empty()) std::filesystem::remove(created);
 }
 
 static void checkShuttle(const Scene& source, SceneResources& resources)
@@ -1130,7 +1103,7 @@ int main(int argc, char** argv)
         LightManager lights;
         assert(SceneSetup::build(scene, lights, resources));
         checkSharedTextures(resources);
-        checkShaderCache();
+        checkShaderCompilation();
         checkShuttle(scene, resources);
         std::cout << "Shuttle lighting and propulsion checks passed\n";
         return 0;
@@ -1236,7 +1209,7 @@ int main(int argc, char** argv)
         assert(shuttleVertices == 33957);
         assert(resources.shuttleParts.size() == 13);
         checkSharedTextures(resources);
-        checkShaderCache();
+        checkShaderCompilation();
         checkShuttle(scene, resources);
         // Polygon triangulation, absent UVs/normals and relative indices.
         {

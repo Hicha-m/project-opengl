@@ -269,17 +269,12 @@ a context; the eight shuttle engine materials reuse one texture. GPU upload and
 mipmap generation still happen at startup. Prepared textures occupy about 300 MiB
 uncompressed, trading disk space for faster startup.
 
-On drivers supporting OpenGL 4.1 or `GL_ARB_get_program_binary`, shader programs
-are cached in SDL's per-user preference directory for
-`OpenGLSpaceCinematic/ShaderCache`. Cache identities include the full GLSL sources,
-GPU vendor/renderer and driver/GLSL versions. Corrupt or rejected cache files and
-unwritable cache directories fall back to source compilation; OpenGL 3.3 remains
-supported. The first launch on each GPU/driver still compiles shaders.
+The build prepares a GLSL source archive. Shader programs are compiled and linked
+at each startup using the current OpenGL driver, with no persistent shader cache.
+OpenGL 3.3 remains supported.
 
 ```bash
 ./project --startup-timings
-# Compare with source compilation:
-./project --startup-timings --no-shader-cache
 # Headless verification:
 SDL_AUDIO_DRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 ./project --smoke-test --software-context --startup-timings
 ```
@@ -290,7 +285,7 @@ to the first completed frame. Diagnostic mode synchronizes that first frame to
 include GPU work. Timings depend on the GPU, audio backend and disk cache.
 The prepared-assets unit test compares every texture pixel and shuttle vertex
 against the source data; the runtime suite checks shared GPU ownership, shader
-cache recovery, compilation/link errors and partial startup cleanup.
+compilation/link errors and partial startup cleanup.
 
 ## GitHub Actions (CI/CD)
 

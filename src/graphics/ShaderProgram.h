@@ -29,7 +29,6 @@ public:
 	void use();
 
 	GLuint getProgram() const;
-    bool loadedFromCache() const { return mLoadedFromCache; }
 
 	void setUniform(const GLchar* name, const glm::vec2& v);
 	void setUniform(const GLchar* name, const glm::vec3& v);
@@ -44,7 +43,6 @@ public:
 
 private:
 
-    bool mLoadedFromCache = false;
 	void  checkCompileErrors(GLuint shader, ShaderType type);
 
 
