@@ -6,8 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
-#include "audio/MusicPlayer.h"
-#include "cinematic/MainSequence.h"
+#include <thread>
 int main() {
     MusicPlayer music;
     assert(music.load("build/music/cinematic.mp3"));

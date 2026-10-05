@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <limits>
 #include <memory>
 #define DR_MP3_NO_STDIO
@@ -10,6 +11,11 @@
 #include "dr_mp3.h"
 
 MusicPlayer::~MusicPlayer()
+{
+    release();
+}
+
+bool MusicPlayer::load(const std::string& path)
 {
     release();
     if(!SDL_InitSubSystem(SDL_INIT_AUDIO)) return false;
