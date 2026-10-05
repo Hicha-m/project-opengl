@@ -3,6 +3,9 @@ name: Desktop portability and packages
 on:
   push:
     branches: [master]
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   pull_request:
   workflow_dispatch:
 
@@ -168,3 +171,38 @@ jobs:
             ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    name: Publish desktop release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [build, docker]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified desktop packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: release-packages
+          merge-multiple: true
+      - name: Create release and upload packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          packages=(release-packages/*.zip release-packages/*.tar.gz)
+          if [[ ${#packages[@]} -ne 5 ]]; then
+            echo "Expected five desktop packages, found ${#packages[@]}" >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${packages[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${packages[@]}" \
+              --verify-tag --title "Release $RELEASE_TAG" --generate-notes
+          fi
