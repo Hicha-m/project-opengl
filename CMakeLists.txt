@@ -52,6 +52,7 @@ add_library(project_core STATIC
 )
 target_include_directories(project_core PUBLIC src)
 target_include_directories(project_core SYSTEM PRIVATE third_party/stb)
+target_include_directories(project_core SYSTEM PRIVATE third_party/dr_libs)
 target_link_libraries(project_core PUBLIC OpenGL::GL glfw glad glm::glm SDL3::SDL3)
 target_compile_definitions(project_core PUBLIC GLFW_INCLUDE_NONE)
 if(MSVC)
@@ -79,11 +80,20 @@ function(convert_audio input output)
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/audio/${input}"
         VERBATIM)
 endfunction()
-convert_audio("Can You Hear The Music.mp3" cinematic.wav)
+add_custom_command(OUTPUT "${RUNTIME_DIR}/build/music/cinematic.mp3"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${RUNTIME_DIR}/build/music"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/audio/Can You Hear The Music.mp3"
+        "${RUNTIME_DIR}/build/music/cinematic.mp3"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/audio/Can You Hear The Music.mp3"
+    VERBATIM)
 convert_audio("asteroid-hitting-something.mp3" impact.wav)
 add_custom_target(runtime_audio ALL DEPENDS
-    "${RUNTIME_DIR}/build/music/cinematic.wav"
+    "${RUNTIME_DIR}/build/music/cinematic.mp3"
     "${RUNTIME_DIR}/build/music/impact.wav")
+# Remove the previous build's generated music before copying a macOS bundle.
+add_custom_command(TARGET runtime_audio POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E rm -f "${RUNTIME_DIR}/build/music/cinematic.wav")
 
 add_executable(project src/main.cpp)
 target_link_libraries(project PRIVATE project_core)
@@ -99,6 +109,7 @@ if(APPLE)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/shaders" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/shaders"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/textures" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/textures"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/models" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/models"
+        COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/build/music/cinematic.wav"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${RUNTIME_DIR}/build/music" "$<TARGET_BUNDLE_CONTENT_DIR:project>/Resources/build/music"
         VERBATIM)
 elseif(UNIX)
@@ -145,7 +156,7 @@ else()
     set(RESOURCE_DESTINATION ".")
 endif()
 install(DIRECTORY shaders textures models DESTINATION "${RESOURCE_DESTINATION}")
-install(FILES "${RUNTIME_DIR}/build/music/cinematic.wav" "${RUNTIME_DIR}/build/music/impact.wav"
+install(FILES "${RUNTIME_DIR}/build/music/cinematic.mp3" "${RUNTIME_DIR}/build/music/impact.wav"
     DESTINATION "${RESOURCE_DESTINATION}/build/music")
 install(FILES README.md DESTINATION .)
 install(DIRECTORY third_party/ DESTINATION licenses

@@ -2,11 +2,14 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 #include "audio/MusicPlayer.h"
 #include "cinematic/MainSequence.h"
 int main() {
     MusicPlayer music;
-    assert(music.load("build/music/cinematic.wav"));
+    assert(music.load("build/music/cinematic.mp3"));
     assert(music.ready() && !music.running() && music.position()==0);
     assert(std::abs(music.duration()-MainSequence::Duration)<0.001f);
     assert(music.loadImpact("build/music/impact.wav"));
@@ -39,7 +42,19 @@ int main() {
     assert(music.seek(-20) && music.position()==0);
     music.setPlaybackRate(1); music.setPaused(false);
     music.release(); assert(!music.ready() && !music.running() && music.position()==0);
-    assert(!music.load("build/music/missing.wav") && !music.ready());
-    assert(music.load("build/music/cinematic.wav") && music.restart());
+    assert(!music.load("build/music/missing.mp3") && !music.ready());
+    const auto invalid=std::filesystem::temp_directory_path()/
+        ("invalid-music-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".mp3");
+    std::ofstream(invalid,std::ios::binary)<<"This is not an MP3 stream.";
+    assert(!music.load(invalid.u8string()) && !music.ready() && !music.running());
+    std::ofstream(invalid,std::ios::binary|std::ios::trunc).close();
+    assert(!music.load(invalid.u8string()) && !music.ready());
+    std::filesystem::remove(invalid);
+    assert(music.load("build/music/cinematic.mp3") && music.restart());
+    assert(music.loadImpact("build/music/impact.wav"));
+    assert(!music.seek(std::numeric_limits<float>::quiet_NaN()));
+    music.setPaused(true);
+    assert(music.seek(music.duration()+10));
+    assert(std::abs(music.position()-MainSequence::Duration)<0.001f);
     std::cout<<"Music decoding, playback clock, rewind, mute and resource recovery passed (dummy audio)\n";
 }

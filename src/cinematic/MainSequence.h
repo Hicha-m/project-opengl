@@ -9,7 +9,6 @@ class EarthBreakupSystem;
 
 namespace MainSequence
 {
-    // Decoded duration of audio/Can You Hear The Music.mp3 (48 kHz PCM).
     constexpr float Duration = 110.165625f;
     constexpr float BombardmentStart = 8.0f;
     constexpr float BombardmentEnd = 62.0f;

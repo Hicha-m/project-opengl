@@ -4,16 +4,37 @@
 #include <algorithm>
 #include <iostream>
 #include <cmath>
+#include <limits>
+#include <memory>
+#define DR_MP3_NO_STDIO
+#define DR_MP3_IMPLEMENTATION
+#include "dr_mp3.h"
 
 MusicPlayer::~MusicPlayer() { release(); }
 bool MusicPlayer::load(const std::string& path) {
     release();
     if(!SDL_InitSubSystem(SDL_INIT_AUDIO)) return false;
     mInitialized=true;
-    SDL_AudioSpec spec{}; Uint8* data=nullptr; Uint32 length=0;
+    SDL_AudioSpec spec{};
     const auto filename = ResourcePaths::resolve(path).u8string();
-    if(!SDL_LoadWAV(filename.c_str(),&spec,&data,&length)) { release(); return false; }
-    mPCM.assign(data,data+length); SDL_free(data);
+    // SDL handles UTF-8 paths on every desktop target; decode the same compressed
+    // source in memory without an external player or a generated WAV on disk.
+    size_t encodedSize=0;
+    std::unique_ptr<void,decltype(&SDL_free)> encoded(SDL_LoadFile(filename.c_str(),&encodedSize),SDL_free);
+    if(!encoded || encodedSize==0) { release(); return false; }
+    drmp3_config config{};
+    drmp3_uint64 frameCount=0;
+    const auto freePCM=[](drmp3_int16* pcm) { drmp3_free(pcm,nullptr); };
+    std::unique_ptr<drmp3_int16,decltype(freePCM)> decoded(
+        drmp3_open_memory_and_read_pcm_frames_s16(encoded.get(),encodedSize,&config,&frameCount,nullptr),freePCM);
+    if(!decoded || !config.channels || !config.sampleRate || !frameCount
+        || frameCount>std::numeric_limits<int>::max()/(sizeof(drmp3_int16)*config.channels)) {
+        release(); return false;
+    }
+    const auto bytes=static_cast<size_t>(frameCount)*config.channels*sizeof(drmp3_int16);
+    const auto* data=reinterpret_cast<const unsigned char*>(decoded.get());
+    mPCM.assign(data,data+bytes);
+    spec={SDL_AUDIO_S16,static_cast<int>(config.channels),static_cast<int>(config.sampleRate)};
     mBytesPerFrame=spec.channels*(SDL_AUDIO_BITSIZE(spec.format)/8);
     mBytesPerSecond=double(spec.freq)*mBytesPerFrame;
     if(mBytesPerSecond<=0 || mPCM.empty()) { release(); return false; }
