@@ -282,6 +282,7 @@ must not be presented as mobile builds. See [the mobile assessment](docs/MOBILE.
 | `0` | Restore normal speed |
 | `M` | Mute or unmute audio |
 | `F3` | Switch between cinematic and FPS camera |
+| `F11` | Toggle fullscreen and restore the previous window size and position |
 | `W` / `S` | Move forward or backward in FPS mode |
 | `A` / `D` | Strafe left or right in FPS mode |
 | `Z` / `X` | Move up or down in FPS mode |

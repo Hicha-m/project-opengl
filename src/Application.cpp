@@ -93,6 +93,8 @@ bool Application::initOpenGL()
 
     GLFWmonitor* monitor = mOptions.fullscreen ? glfwGetPrimaryMonitor() : nullptr;
     int width = mOptions.width, height = mOptions.height;
+    mWindowedWidth = width;
+    mWindowedHeight = height;
     if (monitor)
     {
         if (const auto* mode = glfwGetVideoMode(monitor))
@@ -338,6 +340,32 @@ void Application::showFPS(double currentTime)
     mFrameCount = 0;
 }
 
+void Application::toggleFullscreen()
+{
+    if (glfwGetWindowMonitor(mWindow))
+    {
+        glfwSetWindowMonitor(mWindow, nullptr, mWindowedX, mWindowedY,
+            mWindowedWidth, mWindowedHeight, GLFW_DONT_CARE);
+    }
+    else
+    {
+        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+        if (!monitor) return;
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        if (!mode) return;
+        glfwGetWindowPos(mWindow, &mWindowedX, &mWindowedY);
+        glfwGetWindowSize(mWindow, &mWindowedWidth, &mWindowedHeight);
+        glfwSetWindowMonitor(mWindow, monitor, 0, 0,
+            mode->width, mode->height, mode->refreshRate);
+    }
+    mOptions.fullscreen = glfwGetWindowMonitor(mWindow) != nullptr;
+    int width, height;
+    glfwGetFramebufferSize(mWindow, &width, &height);
+    onFramebufferSize(width, height);
+    glfwGetWindowSize(mWindow, &width, &height);
+    glfwSetCursorPos(mWindow, width / 2.0, height / 2.0);
+}
+
 void Application::keyCallback(GLFWwindow* window, int key, int, int action, int)
 {
     if (auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window))) app->onKey(key, action);
@@ -352,6 +380,7 @@ void Application::onKey(int key, int action)
 {
     if (action != GLFW_PRESS) return;
     if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
+    if (key == GLFW_KEY_F11) toggleFullscreen();
     if (key == GLFW_KEY_F1)
     {
         mWireframe = !mWireframe;

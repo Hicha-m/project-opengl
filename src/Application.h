@@ -67,6 +67,7 @@ private:
     void updateInput(float deltaTime);
     void render();
     void showFPS(double currentTime);
+    void toggleFullscreen();
     void onKey(int key, int action);
     void onFramebufferSize(int width, int height);
     static void keyCallback(GLFWwindow*, int, int, int, int);
@@ -76,6 +77,10 @@ private:
     float mExportLastImpact = -1;
     ApplicationOptions mOptions;
     GLFWwindow* mWindow = nullptr;
+    int mWindowedX = 100;
+    int mWindowedY = 100;
+    int mWindowedWidth = 1280;
+    int mWindowedHeight = 720;
     bool mGLFWInitialized = false;
     bool mInitialized = false;
     bool mWireframe = false;
