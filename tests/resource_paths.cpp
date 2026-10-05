@@ -20,17 +20,18 @@ int main()
     assert(std::ifstream(ResourcePaths::resolve("shaders/earth.vert")).good());
     {
         MusicPlayer music;
-        assert(music.load("build/music/cinematic.wav"));
+        assert(music.load("build/music/cinematic.mp3"));
         assert(music.loadImpact("build/music/impact.wav"));
     }
-    for (const auto* filename : {"cinematic.wav", "impact.wav"})
-    {
-        std::filesystem::copy_file(root / "build/music" / filename, temporary / "build/music" / filename);
-    }
+    for (const auto* filename : {"cinematic.mp3", "impact.wav"})
+        std::filesystem::copy_file(root / "build/music" / filename,
+                                   temporary / "build/music" / filename);
+    std::filesystem::rename(temporary / "build/music/cinematic.mp3",
+                            temporary / std::filesystem::u8path("build/music/chanson-étoiles.mp3"));
     ResourcePaths::setRoot(temporary);
     {
         MusicPlayer music;
-        assert(music.load("build/music/cinematic.wav"));
+        assert(music.load("build/music/chanson-étoiles.mp3"));
         assert(music.loadImpact("build/music/impact.wav"));
         assert(music.restart());
     }

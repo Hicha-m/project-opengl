@@ -50,9 +50,10 @@ keeps simulation, scene management and rendering in separate modules.
 
 ### Audio
 
-The cinematic music drives the visible timeline when it is available. FFmpeg
-converts the supplied MP3 files to WAV during the build, while SDL3 handles
-playback, volume, mute and impact sounds.
+The cinematic music drives the visible timeline when it is available. The bundled
+dr_mp3 decoder loads the original MP3 into PCM memory at startup; SDL3 handles
+playback, volume, mute and impact sounds. Only the short impact sound is converted
+to WAV by FFmpeg during the build.
 
 ## Desktop support and downloadable packages
 
@@ -60,14 +61,16 @@ The desktop targets are **Windows x64, macOS Apple Silicon / Intel, and Linux
 x64 / ARM64**. Each platform has its own executable; one binary cannot run on
 all operating systems. A graphics driver supporting OpenGL 3.3 is required.
 
-Download the matching `package-*` artifact from a successful run in
+Download the matching archive from
+[GitHub Releases](https://github.com/Hicha-m/project-opengl/releases), or the
+matching `package-*` artifact from a successful run in
 [GitHub Actions](https://github.com/Hicha-m/project-opengl/actions). Extract the
 complete archive, then launch `project.exe` on Windows, `project.app` on macOS,
 or `project` on Linux. Keep the resources and bundled libraries together.
 You can move the extracted directory and launch it from another working directory,
 including paths containing spaces and non-ASCII characters.
 
-Packages contain converted WAV audio; **FFmpeg is needed only when building**.
+Packages contain MP3 music and the short impact WAV; **FFmpeg is needed only when building**.
 SDL3 handles music and impact playback through the host's default audio device.
 The application reports unavailable audio and can continue without sound.
 Do not set `SDL_AUDIO_DRIVER=dummy` when you want audible playback.
@@ -253,12 +256,12 @@ The container desktop launch is intended for Linux hosts.
 ## GitHub Actions (CI/CD)
 
 [The workflow](.github/workflows/cmake-multi-platform.yml) runs on default-branch pushes,
-pull requests and manual triggers:
+pull requests, version-tag pushes (`1.0.0` or `v1.0.0`) and manual triggers:
 
 - Debug and Release builds with Clang on Linux and macOS Apple Silicon, plus
   Linux GCC, Linux ARM64, macOS Intel and Windows MSVC builds.
 - Fourteen CPU/audio/resource tests, including executable-relative loading
-  and WAV playback from Unicode paths.
+  and MP3 music / WAV impact playback from Unicode paths.
 - The complete OpenGL integration suite on Linux with Xvfb and Mesa.
 - Package extraction and scene/audio/rendering startup on every desktop target
   from an unrelated working directory and a Unicode installation path. macOS
@@ -269,6 +272,20 @@ pull requests and manual triggers:
 - Verified Release packages are uploaded as downloadable artifacts.
 - Docker builds only after the desktop checks succeed. Default-branch pushes
   also publish `ghcr.io/hicha-m/project-opengl:latest` and `sha-<commit>`.
+- Version-tag pushes create a GitHub Release with generated release notes and
+  the five verified desktop packages, after all desktop and Docker checks pass.
+  Rerunning the workflow updates the existing release's package attachments.
+
+To publish a release, commit and push the workflow and project changes first,
+then tag that commit from the project directory:
+
+```bash
+git tag -a 1.0.0 -m "Release 1.0.0"
+git push origin 1.0.0
+```
+
+Keep the version in `CMakeLists.txt` in sync with the release tag so package
+filenames and application metadata use the same version.
 
 ## Mobile scope
 

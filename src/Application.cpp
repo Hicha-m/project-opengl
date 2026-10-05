@@ -50,7 +50,7 @@ bool Application::init()
         shutdown();
         return false;
     }
-    if (mOptions.music && mMusic.load("build/music/cinematic.wav"))
+    if(mOptions.music && mMusic.load("build/music/cinematic.mp3"))
     {
         mTimeline.setDuration(mMusic.duration());
         if (!mMusic.loadImpact("build/music/impact.wav"))
