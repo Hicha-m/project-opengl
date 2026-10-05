@@ -1,8 +1,8 @@
 #pragma once
-#include <unordered_map>
-#include <random>
 #include "systems/Meteor.h"
 #include "systems/ParticleSystem.h"
+#include <random>
+#include <unordered_map>
 
 struct MeteorTrailConfig
 {
@@ -27,6 +27,7 @@ public:
     void update(const std::vector<Meteor>& meteors, float deltaTime);
     std::size_t trackedCount() const { return mStates.size(); }
     const MeteorTrailConfig& config() const { return mConfig; }
+
 private:
     struct State
     {

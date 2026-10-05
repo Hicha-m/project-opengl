@@ -1,16 +1,18 @@
-#include "platform/ResourcePaths.h"
 #include "audio/MusicPlayer.h"
+#include "platform/ResourcePaths.h"
 #include <cassert>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 
-int main() {
+int main()
+{
     const auto root = ResourcePaths::root();
     const auto originalWorkingDirectory = std::filesystem::current_path();
-    const auto temporary = std::filesystem::temp_directory_path() /
-        std::filesystem::u8path("space-étoiles-" + std::to_string(
-            std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto temporary =
+        std::filesystem::temp_directory_path() /
+        std::filesystem::u8path("space-étoiles-" +
+                                std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(temporary / "build/music");
     std::filesystem::current_path(temporary);
     // Starting from an unrelated directory still finds executable-relative assets.
@@ -22,8 +24,9 @@ int main() {
         assert(music.loadImpact("build/music/impact.wav"));
     }
     for (const auto* filename : {"cinematic.wav", "impact.wav"})
-        std::filesystem::copy_file(root / "build/music" / filename,
-                                   temporary / "build/music" / filename);
+    {
+        std::filesystem::copy_file(root / "build/music" / filename, temporary / "build/music" / filename);
+    }
     ResourcePaths::setRoot(temporary);
     {
         MusicPlayer music;

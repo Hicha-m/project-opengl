@@ -8,18 +8,21 @@ namespace
     {
         return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
     }
-    bool range(float a, float b, bool zero = false)
+    bool range(float minimum, float maximum, bool zero = false)
     {
-        return std::isfinite(a) && std::isfinite(b) && (zero ? a >= 0 : a > 0) && b >= a;
+        return std::isfinite(minimum) && std::isfinite(maximum) && (zero ? minimum >= 0 : minimum > 0) &&
+               maximum >= minimum;
     }
-}
+} // namespace
 
 bool MeteorTrailEmitter::configure(const MeteorTrailConfig& config)
 {
-    if (!std::isfinite(config.spacing) || config.spacing <= 0
-        || !range(config.minSize, config.maxSize)
-        || !range(config.minLifetime, config.maxLifetime)
-        || !range(config.minDriftSpeed, config.maxDriftSpeed, true)) return false;
+    if (!std::isfinite(config.spacing) || config.spacing <= 0 || !range(config.minSize, config.maxSize) ||
+        !range(config.minLifetime, config.maxLifetime) ||
+        !range(config.minDriftSpeed, config.maxDriftSpeed, true))
+    {
+        return false;
+    }
     mConfig = config;
     reset();
     return true;
@@ -33,10 +36,16 @@ float MeteorTrailEmitter::random(State& state, float minimum, float maximum)
 
 void MeteorTrailEmitter::observe(const std::vector<Meteor>& meteors)
 {
-    for (auto& entry : mStates) entry.second.seen = false;
+    for (auto& entry : mStates)
+    {
+        entry.second.seen = false;
+    }
     for (const auto& meteor : meteors)
     {
-        if (!meteor.id || !finite(meteor.transform.position)) continue;
+        if (!meteor.id || !finite(meteor.transform.position))
+        {
+            continue;
+        }
         auto result = mStates.try_emplace(meteor.id);
         auto& state = result.first->second;
         if (result.second)
@@ -50,27 +59,44 @@ void MeteorTrailEmitter::observe(const std::vector<Meteor>& meteors)
         state.seen = true;
     }
     for (auto it = mStates.begin(); it != mStates.end();)
-        if (!it->second.seen) it = mStates.erase(it);
-        else ++it;
+    {
+        if (!it->second.seen)
+        {
+            it = mStates.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
-void MeteorTrailEmitter::update(const std::vector<Meteor>& meteors, float dt)
+void MeteorTrailEmitter::update(const std::vector<Meteor>& meteors, float deltaTime)
 {
-    if (!std::isfinite(dt) || dt <= 0) return;
+    if (!std::isfinite(deltaTime) || deltaTime <= 0)
+    {
+        return;
+    }
     observe(meteors);
     for (const auto& meteor : meteors)
     {
         auto found = mStates.find(meteor.id);
-        if (found == mStates.end()) continue;
+        if (found == mStates.end())
+        {
+            continue;
+        }
         auto& state = found->second;
         const glm::dvec3 start(state.position);
         const glm::dvec3 segment = glm::dvec3(meteor.transform.position) - start;
         const double distance = glm::length(segment);
         state.position = meteor.transform.position;
-        if (distance == 0) continue; // Stationary meteors emit no trail.
+        if (distance == 0)
+        {
+            continue; // Stationary meteors emit no trail.
+        }
         const glm::vec3 direction(segment / distance);
         const double spacing = mConfig.spacing;
-        // Small tolerance absorbs float position rounding at a sample boundary.
+        // Small tolerance absorbs float position rounding at minimum sample boundary.
         const double tolerance = spacing * 0.00001;
         double offset = spacing - state.remainder;
         while (offset <= distance + tolerance)
@@ -81,7 +107,7 @@ void MeteorTrailEmitter::update(const std::vector<Meteor>& meteors, float dt)
             particle.velocity = -direction * random(state, mConfig.minDriftSpeed, mConfig.maxDriftSpeed);
             particle.size = random(state, mConfig.minSize, mConfig.maxSize);
             particle.lifetime = random(state, mConfig.minLifetime, mConfig.maxLifetime);
-            particle.age = float(double(dt) * (1.0 - fraction));
+            particle.age = float(double(deltaTime) * (1.0 - fraction));
             // Samples born earlier in this frame have already moved and faded.
             // Still advance RNG for expired samples to preserve subsequent emission.
             particle.position += particle.velocity * particle.age;

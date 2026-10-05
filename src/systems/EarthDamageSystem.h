@@ -1,7 +1,7 @@
 #pragma once
-#include <vector>
-#include "systems/MeteorImpact.h"
 #include "scene/Transform.h"
+#include "systems/MeteorImpact.h"
+#include <vector>
 class Texture2D;
 
 // Persistent CPU mask in the same local spherical UVs as geometry/Sphere.
@@ -29,6 +29,7 @@ public:
     bool upload(Texture2D& texture);
     bool uploadHeat(Texture2D& texture);
     bool upload(Texture2D& damage, Texture2D& heat);
+
 private:
     double mDestructionLevel = 0; // Accumulated in double, clamped to [0,1].
     std::vector<float> mPixels;

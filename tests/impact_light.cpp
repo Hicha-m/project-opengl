@@ -1,9 +1,9 @@
+#include "scene/LightManager.h"
+#include "systems/ImpactLightSystem.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include "systems/ImpactLightSystem.h"
-#include "scene/LightManager.h"
 
 int main()
 {
@@ -17,7 +17,7 @@ int main()
     system.consume({impact});
     assert(system.lights().size() == 1);
     assert(glm::distance(system.lights()[0].position,
-        impact.position + impact.normal * ImpactLightSystem::SurfaceOffset) < 0.00001f);
+                         impact.position + impact.normal * ImpactLightSystem::SurfaceOffset) < 0.00001f);
     const float initial = system.lights()[0].initialIntensity;
     assert(initial == 15);
     system.update(10); // Even a long birth frame must show the initial flash.
@@ -34,8 +34,10 @@ int main()
     assert(system.lights()[0].intensity < initial * 0.25f);
     assert(system.lights()[1].intensity == initial && system.lights()[1].age == 0);
     const auto beforeInvalid = system.lights();
-    for (float dt : {-1.0f, std::numeric_limits<float>::infinity(),
-        std::numeric_limits<float>::quiet_NaN()}) system.update(dt);
+    for (float dt : {-1.0f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()})
+    {
+        system.update(dt);
+    }
     assert(system.lights()[0].age == beforeInvalid[0].age);
     system.update(0.5f);
     assert(system.lights().empty());
@@ -87,28 +89,39 @@ int main()
         assert(selected.size() == LightManager::MaxPointLights);
         assert(selected.front().position.x == 78 && selected[1].position.x == 79);
         for (std::size_t i = 1; i < selected.size(); ++i)
+        {
             assert(selected[i - 1].intensity >= selected[i].intensity);
+        }
         system.update(0.125f);
         if (!pass)
         {
             replay = system.lights();
             selectedReplay = selected;
         }
-        else for (std::size_t i = 0; i < replay.size(); ++i)
+        else
         {
-            assert(system.lights()[i].position == replay[i].position);
-            assert(system.lights()[i].intensity == replay[i].intensity);
+            for (std::size_t i = 0; i < replay.size(); ++i)
+            {
+                assert(system.lights()[i].position == replay[i].position);
+                assert(system.lights()[i].intensity == replay[i].intensity);
+            }
         }
-        if (pass) for (std::size_t i = 0; i < selected.size(); ++i)
+        if (pass)
         {
-            assert(selected[i].position == selectedReplay[i].position);
-            assert(selected[i].intensity == selectedReplay[i].intensity);
+            for (std::size_t i = 0; i < selected.size(); ++i)
+            {
+                assert(selected[i].position == selectedReplay[i].position);
+                assert(selected[i].intensity == selectedReplay[i].intensity);
+            }
         }
     }
     // GPU limit also applies when only persistent lights overflow.
     system.clear();
     system.publish(manager);
-    for (int i = 0; i < 100; ++i) manager.addPointLight(permanent);
+    for (int i = 0; i < 100; ++i)
+    {
+        manager.addPointLight(permanent);
+    }
     assert(manager.shaderPointLights().size() == LightManager::MaxPointLights);
     std::cout << "Impact flash birth, decay, expiry, selection and replay checks passed\n";
 }

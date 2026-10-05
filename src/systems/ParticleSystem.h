@@ -1,9 +1,10 @@
 #pragma once
-#include <vector>
-#include <memory>
 #include "systems/Particle.h"
+#include <memory>
+#include <vector>
 class ParticleRenderer;
 
+// Advances particles and removes expired ones; delegates drawing to ParticleRenderer.
 class ParticleSystem
 {
 public:
@@ -21,6 +22,7 @@ public:
     void releaseGraphics();
     bool graphicsReady() const { return bool(mRenderer); }
     void render(const glm::mat4& view, const glm::mat4& projection);
+
 private:
     std::vector<Particle> mParticles;
     std::unique_ptr<ParticleRenderer> mRenderer;

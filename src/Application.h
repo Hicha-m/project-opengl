@@ -1,23 +1,23 @@
 #pragma once
-#include <memory>
-#include <cstddef>
-#include <functional>
-#include "scene/SceneResources.h"
-#include "scene/Scene.h"
-#include "scene/LightManager.h"
-#include "graphics/Renderer.h"
 #include "animation/Timeline.h"
+#include "audio/MusicPlayer.h"
 #include "camera/CinematicCamera.h"
-#include "systems/MeteorSystem.h"
-#include "systems/MeteorShower.h"
+#include "graphics/HDRPipeline.h"
+#include "graphics/Renderer.h"
+#include "scene/LightManager.h"
+#include "scene/Scene.h"
+#include "scene/SceneResources.h"
+#include "systems/EarthBreakupSystem.h"
+#include "systems/EarthDamageSystem.h"
 #include "systems/ImpactLightSystem.h"
 #include "systems/ImpactParticleEmitter.h"
+#include "systems/MeteorShower.h"
+#include "systems/MeteorSystem.h"
 #include "systems/MeteorTrailEmitter.h"
-#include "systems/EarthDamageSystem.h"
-#include "systems/EarthBreakupSystem.h"
 #include "systems/SolarSystem.h"
-#include "audio/MusicPlayer.h"
-#include "graphics/HDRPipeline.h"
+#include <cstddef>
+#include <functional>
+#include <memory>
 
 struct GLFWwindow;
 
@@ -31,6 +31,7 @@ struct ApplicationOptions
     bool softwareContext = false; // Headless OSMesa verification, no desktop GPU required.
 };
 
+// Owns the window and resources; advances the cinematic, simulation and rendering.
 class Application
 {
 public:
@@ -42,8 +43,8 @@ public:
     bool init();
     void run(std::size_t frameLimit = 0); // zero: run until window closes
     void renderVideo(int width, int height, int fps, double duration,
-        const std::function<void(const unsigned char*, std::size_t)>& writeFrame,
-        const std::function<void(float, float)>& writeImpact);
+                     const std::function<void(const unsigned char*, std::size_t)>& writeFrame,
+                     const std::function<void(float, float)>& writeImpact);
     void shutdown();
     void restartSequence();
     void seekSequence(float seconds);
@@ -63,6 +64,8 @@ private:
     bool initOpenGL();
     void update(float deltaTime);
     void simulate(float deltaTime, bool audible);
+    void updateSunlight();
+    void dispatchImpactEffects(bool audible);
     void resetSequenceState();
     void updateInput(float deltaTime);
     void render();
@@ -88,13 +91,12 @@ private:
     bool mFPSMode = false;
     bool mMusicMuted = false;
     MusicPlayer mMusic;
-    float mPlaybackRate=1;
-    bool mSequencePaused=false;
-    bool mClockResync=false;
+    float mPlaybackRate = 1;
+    bool mSequencePaused = false;
+    bool mClockResync = false;
     float mMoveSpeed = 5.0f;
     double mFPSStart = 0;
     unsigned mFrameCount = 0;
-    double mDebugTimer = 0;
 
     // Reset explicitly in shutdown while the context is still current.
     std::unique_ptr<SceneResources> mResources;

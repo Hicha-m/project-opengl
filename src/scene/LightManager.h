@@ -6,7 +6,6 @@
 
 #include "graphics/ShaderProgram.h"
 
-
 struct DirectionalLight
 {
     glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -15,7 +14,6 @@ struct DirectionalLight
 
     float intensity = 1.0f;
 };
-
 
 struct PointLight
 {
@@ -31,7 +29,6 @@ struct PointLight
 
     float quadratic = 0.032f;
 };
-
 
 class LightManager
 {
@@ -50,15 +47,11 @@ public:
 
     void addPointLight(const PointLight& light);
 
-    void clearPointLights();
-
     const std::vector<PointLight>& getPointLights() const;
 
     void applyToShader(ShaderProgram& shader) const;
 
-
 private:
-
     DirectionalLight mDirectionalLight;
 
     std::vector<PointLight> mPointLights;

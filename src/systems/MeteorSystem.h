@@ -1,14 +1,15 @@
 #pragma once
-#include <memory>
-#include <vector>
+#include "geometry/SphereCollider.h"
 #include "systems/Meteor.h"
 #include "systems/MeteorImpact.h"
-#include "geometry/SphereCollider.h"
+#include <memory>
+#include <vector>
 
 class Renderer;
 class LightManager;
 struct MeteorResources;
 
+// Advances meteor motion/lifetimes and reports collisions as independent impact data.
 class MeteorSystem
 {
 public:
@@ -32,10 +33,9 @@ public:
     bool initGraphics();
     void releaseGraphics();
     bool graphicsReady() const { return bool(mResources); }
-    void render(Renderer& renderer, LightManager& lights,
-        const glm::mat4& view, const glm::mat4& projection,
-        const glm::vec3& cameraPosition,
-        const SphereCollider* absorption = nullptr); // Shrink within 3 core radii.
+    void render(Renderer& renderer, LightManager& lights, const glm::mat4& view, const glm::mat4& projection,
+                const glm::vec3& cameraPosition,
+                const SphereCollider* absorption = nullptr); // Shrink within 3 core radii.
 
 private:
     void simulate(float deltaTime, const SphereCollider* collider);

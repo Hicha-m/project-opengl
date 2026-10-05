@@ -1,5 +1,8 @@
 # OpenGL Space Cinematic
 
+Pour la présentation au professeur : [trame de deux minutes](docs/PRESENTATION.md)
+et [audit du code et des fichiers inutilisés](docs/AUDIT.md).
+
 Real-time OpenGL project featuring a cinematic journey from an Earth under
 meteor bombardment to a wide shot of the Solar System and the Milky Way.
 
@@ -156,6 +159,12 @@ music and impact audio initialization, and renders three frames. Set
 it cannot confirm what a user hears from a physical speaker.
 `--smoke-test --software-context` uses GLFW 3.4+ and an installed OSMesa library
 for graphical verification on machines without a display or native GPU.
+
+The full graphical test suite also accepts this context:
+
+```bash
+SDL_AUDIO_DRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 build/cmake/test_application --software-context
+```
 
 ### GNU Make
 
@@ -325,9 +334,9 @@ Generated diagnostic captures are written to `/tmp` by the runtime tests.
 
 ## Assets
 
-The project uses the supplied textures, shuttle model and audio files. Paths
-are resolved relative to the project root, so launch the application with
-`make run` or from this directory:
+The project uses the supplied textures, shuttle model and audio files. Resources
+are resolved beside the executable (inside `Resources` for a macOS bundle).
+The GNU Make build can be launched with `make run` or from this directory:
 
 ```bash
 ./project

@@ -4,7 +4,6 @@ CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -std=c++17
 LDLIBS := $(shell pkg-config --libs glfw3 sdl3) -lGL
 
 TARGET := project
-SCENE ?= src/main
 BUILD_DIR := build
 MUSIC_WAV := $(BUILD_DIR)/music/cinematic.wav
 IMPACT_WAV := $(BUILD_DIR)/music/impact.wav
@@ -40,8 +39,10 @@ COMMON_SRC := \
 	src/animation/Timeline.cpp
 
 COMMON_OBJ := $(COMMON_SRC:%.cpp=$(BUILD_DIR)/%.o) $(BUILD_DIR)/third_party/glad/src/gl.o
-MAIN_OBJ := $(BUILD_DIR)/$(SCENE).o
-TEST_NAMES := music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application
+MAIN_OBJ := $(BUILD_DIR)/src/main.o
+TEST_NAMES := resource_paths music_player solar_system timeline main_sequence meteor_system meteor_shower meteor_collision impact_light particle_system meteor_trail earth_damage destruction_level earth_breakup application
+UNIT_TEST_NAMES := $(filter-out application,$(TEST_NAMES))
+UNIT_TEST_BIN := $(UNIT_TEST_NAMES:%=$(BUILD_DIR)/tests/%)
 TEST_OBJ := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%.o)
 TEST_BIN := $(TEST_NAMES:%=$(BUILD_DIR)/tests/%)
 DEPS := $(COMMON_OBJ:.o=.d) $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
@@ -64,6 +65,9 @@ $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
+# Tests use assert(), including operations with side effects.
+$(TEST_OBJ): CXXFLAGS += -UNDEBUG
+
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) -MMD -MP -c $< -o $@
@@ -74,20 +78,8 @@ $(TEST_BIN): $(BUILD_DIR)/tests/%: $(BUILD_DIR)/tests/%.o $(COMMON_OBJ)
 run: $(TARGET)
 	./$(TARGET)
 
-test: $(BUILD_DIR)/tests/music_player $(MUSIC_WAV) $(IMPACT_WAV) $(BUILD_DIR)/tests/solar_system $(BUILD_DIR)/tests/earth_breakup $(BUILD_DIR)/tests/destruction_level $(BUILD_DIR)/tests/earth_damage $(BUILD_DIR)/tests/meteor_trail $(BUILD_DIR)/tests/particle_system $(BUILD_DIR)/tests/timeline $(BUILD_DIR)/tests/main_sequence $(BUILD_DIR)/tests/meteor_system $(BUILD_DIR)/tests/meteor_shower $(BUILD_DIR)/tests/meteor_collision $(BUILD_DIR)/tests/impact_light
-	SDL_AUDIO_DRIVER=dummy ./$(BUILD_DIR)/tests/music_player
-	./$(BUILD_DIR)/tests/solar_system
-	./$(BUILD_DIR)/tests/timeline
-	./$(BUILD_DIR)/tests/main_sequence
-	./$(BUILD_DIR)/tests/meteor_system
-	./$(BUILD_DIR)/tests/meteor_shower
-	./$(BUILD_DIR)/tests/meteor_collision
-	./$(BUILD_DIR)/tests/impact_light
-	./$(BUILD_DIR)/tests/particle_system
-	./$(BUILD_DIR)/tests/meteor_trail
-	./$(BUILD_DIR)/tests/earth_damage
-	./$(BUILD_DIR)/tests/destruction_level
-	./$(BUILD_DIR)/tests/earth_breakup
+test: $(UNIT_TEST_BIN) $(MUSIC_WAV) $(IMPACT_WAV)
+	@set -e; for test in $(UNIT_TEST_BIN); do SDL_AUDIO_DRIVER=dummy ./$$test; done
 
 test-sequence: $(BUILD_DIR)/tests/main_sequence
 	./$(BUILD_DIR)/tests/main_sequence

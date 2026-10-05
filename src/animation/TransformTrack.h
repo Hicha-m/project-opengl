@@ -1,8 +1,9 @@
 #pragma once
-#include <functional>
-#include "animation/TimelineTrack.h"
 #include "animation/AnimationTrack.h"
+#include "animation/TimelineTrack.h"
 #include "scene/Transform.h"
+#include <functional>
+#include <utility>
 
 class TransformTrack : public TimelineTrack
 {
@@ -16,14 +17,27 @@ public:
     AnimationTrack<glm::vec3>& scaleTrack() { return mScale; }
     void update(float, float time) override { sample(time); }
     void reset(float time) override { sample(time); }
+
 private:
     void sample(float time)
     {
         auto* target = mTarget();
-        if (!target) return;
-        if (!mPosition.empty()) target->position = mPosition.evaluate(time);
-        if (!mRotation.empty()) target->rotation = mRotation.evaluate(time);
-        if (!mScale.empty()) target->scale = mScale.evaluate(time);
+        if (!target)
+        {
+            return;
+        }
+        if (!mPosition.empty())
+        {
+            target->position = mPosition.evaluate(time);
+        }
+        if (!mRotation.empty())
+        {
+            target->rotation = mRotation.evaluate(time);
+        }
+        if (!mScale.empty())
+        {
+            target->scale = mScale.evaluate(time);
+        }
     }
     std::function<Transform*()> mTarget;
     AnimationTrack<glm::vec3> mPosition, mRotation, mScale;

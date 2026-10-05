@@ -10,7 +10,7 @@ struct SphereCollider
 
     bool isValid() const
     {
-        return std::isfinite(center.x) && std::isfinite(center.y)
-            && std::isfinite(center.z) && std::isfinite(radius) && radius > 0;
+        return std::isfinite(center.x) && std::isfinite(center.y) && std::isfinite(center.z) &&
+               std::isfinite(radius) && radius > 0;
     }
 };
