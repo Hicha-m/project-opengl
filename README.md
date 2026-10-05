@@ -253,82 +253,12 @@ uses software rendering and silent audio; desktop audio/GPU forwarding depends
 on the host configuration. The native CMake build provides normal desktop audio.
 The container desktop launch is intended for Linux hosts.
 
-## Startup assets
-
-Make and CMake prepare the shuttle geometry/materials, all 27 image textures,
-and a GLSL source archive during the build, without an OpenGL context or display.
-Generated files live in `build/assets/` beside the runtime resources and are
-included in CMake installations and macOS bundles. Keep that directory with the
-application. Missing, outdated-format or truncated assets fail with a diagnostic;
-rebuild to regenerate them. OBJ parsing and JPG/PNG decoding are never performed
-as a startup fallback. Conversions rerun only when their inputs or converter change.
-
-Textures retain their original resolution and RGBA values, with the original
-vertical flip prepared at build time. Immutable GPU textures are shared within
-a context; the eight shuttle engine materials reuse one texture. GPU upload and
-mipmap generation still happen at startup. Prepared textures occupy about 300 MiB
-uncompressed, trading disk space for faster startup.
-
-The build prepares a GLSL source archive. Shader programs are compiled and linked
-at each startup using the current OpenGL driver, with no persistent shader cache.
-OpenGL 3.3 remains supported.
 
 ```bash
 ./project --startup-timings
 # Headless verification:
 SDL_AUDIO_DRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 ./project --smoke-test --software-context --startup-timings
 ```
-
-Diagnostics go to stderr and report shuttle binary reading/mesh upload, shader
-loading, texture reading/upload, shared resources, and time from initialization
-to the first completed frame. Diagnostic mode synchronizes that first frame to
-include GPU work. Timings depend on the GPU, audio backend and disk cache.
-The prepared-assets unit test compares every texture pixel and shuttle vertex
-against the source data; the runtime suite checks shared GPU ownership, shader
-compilation/link errors and partial startup cleanup.
-
-## GitHub Actions (CI/CD)
-
-[The workflow](.github/workflows/cmake-multi-platform.yml) runs on default-branch pushes,
-pull requests, version-tag pushes (`1.0.0` or `v1.0.0`) and manual triggers:
-
-- Debug and Release builds with Clang on Linux and macOS Apple Silicon, plus
-  Linux GCC, Linux ARM64, macOS Intel and Windows MSVC builds.
-- Fifteen CPU/audio/resource tests, including executable-relative loading
-  and MP3 music / WAV impact playback from Unicode paths.
-- The complete OpenGL integration suite on Linux with Xvfb and Mesa.
-- Package extraction and scene/audio/rendering startup on every desktop target
-  from an unrelated working directory and a Unicode installation path. macOS
-  runners lack a suitable native OpenGL GPU, so their rendering test uses an
-  explicit headless OSMesa context. Normal macOS launches use Cocoa/OpenGL.
-- Windows CI uses a checksum-verified Mesa software renderer for its startup
-  test; it is not included in the distributed application.
-- Verified Release packages are uploaded as downloadable artifacts.
-- Docker builds only after the desktop checks succeed. Default-branch pushes
-  also publish `ghcr.io/hicha-m/project-opengl:latest` and `sha-<commit>`.
-- Version-tag pushes create a GitHub Release with generated release notes and
-  the five verified desktop packages, after all desktop and Docker checks pass.
-  Rerunning the workflow updates the existing release's package attachments.
-
-To publish a release, commit and push the workflow and project changes first,
-then tag that commit from the project directory:
-
-```bash
-git tag -a 1.0.0 -m "Release 1.0.0"
-git push origin 1.0.0
-```
-
-Keep the version in `CMakeLists.txt` in sync with the release tag so package
-filenames and application metadata use the same version.
-
-## Mobile scope
-
-The current application is a desktop OpenGL/GLFW application. It does not produce
-an Android APK or an iOS app. SDL3 audio can be reused for those platforms, but
-mobile support requires replacing GLFW's window/input loop, adapting the shaders
-and renderer to OpenGL ES or a supported mobile graphics backend, packaging
-resources for mobile storage, and implementing touch controls. Desktop packages
-must not be presented as mobile builds. See [the mobile assessment](docs/MOBILE.md).
 
 ## Controls
 
