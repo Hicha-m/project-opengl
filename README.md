@@ -1,8 +1,5 @@
 # OpenGL Space Cinematic
 
-Pour la présentation au professeur : [trame de deux minutes](docs/PRESENTATION.md)
-et [audit du code et des fichiers inutilisés](docs/AUDIT.md).
-
 Real-time OpenGL project featuring a cinematic journey from an Earth under
 meteor bombardment to a wide shot of the Solar System and the Milky Way.
 
