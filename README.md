@@ -284,15 +284,6 @@ git push origin 1.0.0
 Keep the version in `CMakeLists.txt` in sync with the release tag so package
 filenames and application metadata use the same version.
 
-## Mobile scope
-
-The current application is a desktop OpenGL/GLFW application. It does not produce
-an Android APK or an iOS app. SDL3 audio can be reused for those platforms, but
-mobile support requires replacing GLFW's window/input loop, adapting the shaders
-and renderer to OpenGL ES or a supported mobile graphics backend, packaging
-resources for mobile storage, and implementing touch controls. Desktop packages
-must not be presented as mobile builds. See [the mobile assessment](docs/MOBILE.md).
-
 ## Controls
 
 | Key | Action |
