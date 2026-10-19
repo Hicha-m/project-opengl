@@ -1,8 +1,5 @@
 # OpenGL Space Cinematic
 
-Pour la présentation au professeur : [trame de deux minutes](docs/PRESENTATION.md)
-et [audit du code et des fichiers inutilisés](docs/AUDIT.md).
-
 Real-time OpenGL project featuring a cinematic journey from an Earth under
 meteor bombardment to a wide shot of the Solar System and the Milky Way.
 
@@ -259,6 +256,9 @@ The container desktop launch is intended for Linux hosts.
 # Headless verification:
 SDL_AUDIO_DRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 ./project --smoke-test --software-context --startup-timings
 ```
+
+Keep the version in `CMakeLists.txt` in sync with the release tag so package
+filenames and application metadata use the same version.
 
 ## Controls
 
