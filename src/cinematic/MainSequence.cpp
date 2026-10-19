@@ -67,8 +67,20 @@ namespace
                 const float side = 1 - glm::smoothstep(78.0f, 94.0f, time);
                 const auto cameraOffset = escapeDirection * 12.0f + (up * 3.0f + right * 4.0f) * side;
                 const float orbitAngle = glm::radians(-18.0f) * glm::smoothstep(60.0f, 78.0f, time);
-                const auto rotatedOffset =
+                auto rotatedOffset =
                     glm::vec3(glm::rotate(glm::mat4(1.0f), orbitAngle, up) * glm::vec4(cameraOffset, 1.0f));
+                if (time > 62.0f && time < 90.0f)
+                {
+                    const float turn = glm::smoothstep(62.0f, 86.0f, time);
+                    const float phase = (time - 62.0f) / 28.0f;
+                    const float envelope = std::pow(std::sin(glm::pi<float>() * phase), 2.0f);
+                    const float flyAround = glm::radians(-360.0f) * turn;
+                    rotatedOffset = glm::vec3(glm::rotate(glm::mat4(1.0f), flyAround, up) *
+                                              glm::vec4(rotatedOffset, 0.0f));
+                    // Pull back during the side pass, then sweep above and below.
+                    rotatedOffset *= 1.0f + 0.35f * envelope;
+                    rotatedOffset += up * (4.0f * std::sin(2.0f * glm::pi<float>() * phase) * envelope);
+                }
                 const auto eye = position + rotatedOffset;
                 auto framedEye = glm::mix(mCamera.getPosition(), eye, follow);
                 const auto target = glm::mix(mCamera.target(), position, follow);

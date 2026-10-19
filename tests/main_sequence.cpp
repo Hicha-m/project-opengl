@@ -266,7 +266,8 @@ int main()
                     }
                 }
             }
-            if (flightTimeline.getTime() >= 60)
+            if (flightTimeline.getTime() >= 60 &&
+                (flightTimeline.getTime() <= 62 || flightTimeline.getTime() >= 90))
             {
                 const auto nose =
                     glm::normalize(glm::vec3(ship->transform.getMatrix() * glm::vec4(0, 0, -1, 0)));
@@ -275,6 +276,29 @@ int main()
                 assert(glm::dot(nose, flightCamera.getPosition() - ship->transform.position) >
                        minForward - 0.02f);
                 assert(glm::distance(flightCamera.getPosition(), ship->transform.position) < 15);
+            }
+            if (flightTimeline.getTime() > 62 && flightTimeline.getTime() < 90)
+            {
+                const float distance = glm::distance(flightCamera.getPosition(), ship->transform.position);
+                assert(distance > 8 && distance < 23);
+                assert(glm::distance(flightCamera.target(), ship->transform.position) < 0.01f);
+                if (flightTimeline.getTime() == 74)
+                {
+                    const auto nose = glm::normalize(
+                        glm::vec3(ship->transform.getMatrix() * glm::vec4(0, 0, -1, 0)));
+                    assert(glm::dot(nose, flightCamera.getPosition() - ship->transform.position) < -8);
+                }
+            }
+            if (flightTimeline.getTime() >= 90)
+            {
+                // Preserve the exact authored shot as the solar system appears.
+                const auto direction = glm::normalize(glm::vec3(0.287f, 0.819f, -0.497f));
+                const glm::vec3 up(0, 0.519f, 0.855f), right(0.958f, -0.246f, 0.149f);
+                const float side = 1 - glm::smoothstep(78.0f, 94.0f, flightTimeline.getTime());
+                const auto offset = direction * 12.0f + (up * 3.0f + right * 4.0f) * side;
+                const auto expected = ship->transform.position +
+                    glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(-18.0f), up) * glm::vec4(offset, 1));
+                assert(glm::distance(flightCamera.getPosition(), expected) < 0.01f);
             }
         }
         const auto shipBefore = flightScene.findObject("Shuttle")->transform.position;
