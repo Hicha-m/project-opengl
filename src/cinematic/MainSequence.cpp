@@ -182,7 +182,10 @@ namespace
         camera.orbitRadiusTrack().addKeyframe(MainSequence::Duration, 35000, easing);
         camera.orbitYawTrack().addKeyframe(0, 15, easing);
         camera.orbitYawTrack().addKeyframe(24, 40, easing);
-        camera.orbitYawTrack().addKeyframe(52, 80, easing);
+        // Turn toward the sunlit side before handing the camera to the shuttle.
+        camera.orbitYawTrack().addKeyframe(30, 40, easing);
+        camera.orbitYawTrack().addKeyframe(46, -80, easing);
+        camera.orbitYawTrack().addKeyframe(52, -80, easing);
         camera.orbitYawTrack().addKeyframe(78, 105, easing);
         camera.orbitYawTrack().addKeyframe(90, 110, easing);
         camera.orbitYawTrack().addKeyframe(96, 150, easing);
