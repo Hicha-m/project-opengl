@@ -194,6 +194,9 @@ int main()
     SceneObject wing;
     wing.name = "Shuttle/Wing";
     flightScene.addObject(wing);
+    SceneObject orbit;
+    orbit.name = "OrbitJupiter";
+    flightScene.addObject(orbit);
     Timeline flightTimeline;
     CinematicCamera flightCamera;
     MeteorSystem flightMeteors;
@@ -204,6 +207,7 @@ int main()
     {
         MainSequence::reset(flightTimeline, flightShower, flightMeteors);
         assert(!flightScene.findObject("Shuttle")->visible);
+        assert(!flightScene.findObject("OrbitJupiter")->visible);
         flightTimeline.play();
         MeteorId newest = 0;
         for (int frame = 0; frame < 441; ++frame)
@@ -220,10 +224,14 @@ int main()
                 {
                     newest = meteor.id;
                     const auto clip = vp * glm::vec4(meteor.transform.position, 1);
-                    assert(clip.w <= 0 || std::abs(clip.x) > clip.w * 1.05f ||
-                           std::abs(clip.y) > clip.w * 1.05f);
+                    // The wide retreat now reveals the arrival region after 55 s.
+                    // Keep the offscreen-entry contract for the earlier Earth shots.
+                    if (flightTimeline.getTime() <= 55)
+                        assert(clip.w <= 0 || std::abs(clip.x) > clip.w * 1.05f ||
+                               std::abs(clip.y) > clip.w * 1.05f);
                 }
             }
+            assert(flightScene.findObject("OrbitJupiter")->visible == (flightTimeline.getTime() >= 90));
             const auto* ship = flightScene.findObject("Shuttle");
             assert(ship->transform.position == flightScene.findObject("Shuttle/Wing")->transform.position);
             if (!pass)
@@ -250,7 +258,7 @@ int main()
                 const auto toSun = SolarSystem::SunCenter - ship->transform.position;
                 assert(glm::dot(toCamera, toSun) > 0);
             }
-            if (flightTimeline.getTime() == 52 || flightTimeline.getTime() == 56)
+            if (flightTimeline.getTime() == 52)
             {
                 for (const auto& center : {earth.transform.position, ship->transform.position})
                 {
@@ -266,8 +274,7 @@ int main()
                     }
                 }
             }
-            if (flightTimeline.getTime() >= 60 &&
-                (flightTimeline.getTime() <= 62 || flightTimeline.getTime() >= 90))
+            if (flightTimeline.getTime() >= 90)
             {
                 const auto nose =
                     glm::normalize(glm::vec3(ship->transform.getMatrix() * glm::vec4(0, 0, -1, 0)));
@@ -277,17 +284,22 @@ int main()
                        minForward - 0.02f);
                 assert(glm::distance(flightCamera.getPosition(), ship->transform.position) < 15);
             }
-            if (flightTimeline.getTime() > 62 && flightTimeline.getTime() < 90)
+            if (flightTimeline.getTime() >= 62 && flightTimeline.getTime() <= 84)
             {
-                const float distance = glm::distance(flightCamera.getPosition(), ship->transform.position);
-                assert(distance > 8 && distance < 23);
-                assert(glm::distance(flightCamera.target(), ship->transform.position) < 0.01f);
-                if (flightTimeline.getTime() == 74)
-                {
-                    const auto nose = glm::normalize(
-                        glm::vec3(ship->transform.getMatrix() * glm::vec4(0, 0, -1, 0)));
-                    assert(glm::dot(nose, flightCamera.getPosition() - ship->transform.position) < -8);
-                }
+                const auto direction = glm::normalize(glm::vec3(0.287f, 0.819f, -0.497f));
+                assert(glm::distance(flightCamera.target(),
+                    ship->transform.position + direction * 8.0f) < 0.01f);
+                const auto clip = vp * glm::vec4(ship->transform.position, 1);
+                assert(clip.w > 0 && std::abs(clip.x) < clip.w && std::abs(clip.y) < clip.w);
+                if (flightTimeline.getTime() == 62)
+                    assert(flightCamera.getPosition().y < earth.transform.position.y);
+                if (flightTimeline.getTime() == 70)
+                    assert(flightCamera.getPosition().y < SolarSystem::SunCenter.y);
+            }
+            if (flightTimeline.getTime() == 76)
+            {
+                const auto jupiter = SolarSystem::planetPosition(SolarSystem::Planets[4], 76);
+                assert(glm::distance(flightCamera.getPosition(), jupiter) > 370);
             }
             if (flightTimeline.getTime() >= 90)
             {

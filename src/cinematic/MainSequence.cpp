@@ -6,6 +6,7 @@
 #include "systems/SolarSystem.h"
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
+#include <vector>
 
 namespace
 {
@@ -28,11 +29,47 @@ namespace
                 const auto easing = i < 3 ? EasingType::EaseInOut : EasingType::Linear;
                 mDistance.addKeyframe(times[i], distances[i], easing);
             }
+            // Low, sweeping flyby: pass the scenery while looking along the escape.
+            const auto earth = movingEarth ? SolarSystem::planetPosition(SolarSystem::Planets[2], 52)
+                                           : mOrigin;
+            auto shot = [&](float time, const glm::vec3& target, const glm::vec3& offset)
+            {
+                mTour.push_back({time, target + offset});
+            };
+            shot(62, earth, {0, -18, 58});
+            shot(66, earth, {-65, -25, -20});
+            shot(70, SolarSystem::SunCenter, {130, -45, 170});
+            shot(76, SolarSystem::planetPosition(SolarSystem::Planets[4], 76), {-280, -110, 230});
+            shot(80, SolarSystem::planetPosition(SolarSystem::Planets[5], 80), {85, -55, 100});
+            shot(84, SolarSystem::SunCenter, {850, -180, -380});
         }
         void update(float, float time) override { apply(time); }
         void reset(float time) override { apply(time); }
 
     private:
+        glm::vec3 tourEye(float time) const
+        {
+            if (time <= mTour.front().time) return mTour.front().eye;
+            if (time >= mTour.back().time) return mTour.back().eye;
+            for (std::size_t i = 0; i + 1 < mTour.size(); ++i)
+            {
+                const auto& a = mTour[i];
+                const auto& b = mTour[i + 1];
+                if (time > b.time) continue;
+                const auto& previous = mTour[i == 0 ? i : i - 1];
+                const auto& next = mTour[i + 2 < mTour.size() ? i + 2 : i + 1];
+                const float duration = b.time - a.time;
+                // Shared velocities keep the arcs moving through each waypoint.
+                const auto incoming = i == 0 ? glm::vec3(0) :
+                    (b.eye - previous.eye) * (duration / (b.time - previous.time));
+                const auto outgoing = i + 2 == mTour.size() ? glm::vec3(0) :
+                    (next.eye - a.eye) * (duration / (next.time - a.time));
+                const float t = (time - a.time) / duration, t2 = t * t, t3 = t2 * t;
+                return (2 * t3 - 3 * t2 + 1) * a.eye + (t3 - 2 * t2 + t) * incoming +
+                       (-2 * t3 + 3 * t2) * b.eye + (t3 - t2) * outgoing;
+            }
+            return mTour.back().eye;
+        }
         void apply(float time)
         {
             const glm::vec3 position = mOrigin + escapeDirection * mDistance.evaluate(time);
@@ -60,7 +97,7 @@ namespace
             {
                 mCamera.setPose(mCamera.getPosition(), glm::mix(mCamera.target(), position, departure));
             }
-            const float follow = glm::smoothstep(46.0f, 60.0f, time);
+            const float follow = glm::smoothstep(46.0f, 56.0f, time);
             if (follow > 0)
             {
                 const glm::vec3 up(0, 0.519f, 0.855f), right(0.958f, -0.246f, 0.149f);
@@ -69,21 +106,9 @@ namespace
                 const float orbitAngle = glm::radians(-18.0f) * glm::smoothstep(60.0f, 78.0f, time);
                 auto rotatedOffset =
                     glm::vec3(glm::rotate(glm::mat4(1.0f), orbitAngle, up) * glm::vec4(cameraOffset, 1.0f));
-                if (time > 62.0f && time < 90.0f)
-                {
-                    const float turn = glm::smoothstep(62.0f, 86.0f, time);
-                    const float phase = (time - 62.0f) / 28.0f;
-                    const float envelope = std::pow(std::sin(glm::pi<float>() * phase), 2.0f);
-                    const float flyAround = glm::radians(-360.0f) * turn;
-                    rotatedOffset = glm::vec3(glm::rotate(glm::mat4(1.0f), flyAround, up) *
-                                              glm::vec4(rotatedOffset, 0.0f));
-                    // Pull back during the side pass, then sweep above and below.
-                    rotatedOffset *= 1.0f + 0.35f * envelope;
-                    rotatedOffset += up * (4.0f * std::sin(2.0f * glm::pi<float>() * phase) * envelope);
-                }
                 const auto eye = position + rotatedOffset;
                 auto framedEye = glm::mix(mCamera.getPosition(), eye, follow);
-                const auto target = glm::mix(mCamera.target(), position, follow);
+                auto target = glm::mix(mCamera.target(), position, follow);
                 // During the handoff, keep both the planet and craft inside the
                 // vertical field of view instead of passing between them.
                 if (earth && time < 60)
@@ -105,6 +130,15 @@ namespace
                     const float fitWeight = glm::smoothstep(46.0f, 52.0f, time);
                     framedEye = glm::mix(framedEye, fittedEye, fitWeight);
                 }
+                // Leave after the Earth/shuttle handoff, and rejoin the exact
+                // original camera before the protected solar-system reveal.
+                if (time > 55.0f && time < 90.0f)
+                {
+                    const float tour = glm::smoothstep(55.0f, 62.0f, time) *
+                                       (1.0f - glm::smoothstep(84.0f, 90.0f, time));
+                    framedEye = glm::mix(framedEye, tourEye(time), tour);
+                    target = glm::mix(target, position + escapeDirection * 8.0f, tour);
+                }
                 mCamera.setPose(framedEye, target);
             }
         }
@@ -112,6 +146,22 @@ namespace
         CinematicCamera& mCamera;
         glm::vec3 mOrigin;
         AnimationTrack<float> mDistance;
+        struct TourStop { float time; glm::vec3 eye; };
+        std::vector<TourStop> mTour;
+    };
+    class OrbitGuidesTrack : public TimelineTrack
+    {
+    public:
+        explicit OrbitGuidesTrack(Scene& scene) : mScene(scene) {}
+        void update(float, float time) override { reset(time); }
+        void reset(float time) override
+        {
+            for (auto& object : mScene.objects)
+                if (object.name.rfind("Orbit", 0) == 0)
+                    object.visible = time >= 90.0f;
+        }
+    private:
+        Scene& mScene;
     };
     class SolarTrack : public TimelineTrack
     {
@@ -260,6 +310,7 @@ bool MainSequence::build(Timeline& timeline, CinematicCamera& camera, Scene& sce
     }
     configureCamera(camera, earth->transform.position);
     timeline.setDuration(Duration);
+    timeline.addTrack(std::make_unique<OrbitGuidesTrack>(scene));
 
     const auto initialEarth = earth->transform.position;
     if (solar)
