@@ -107,6 +107,7 @@ def main():
     parser.add_argument("--duration", type=float, help="Seconds to render; defaults to the complete music duration")
     parser.add_argument("--no-audio", action="store_true", help="Export silent video")
     parser.add_argument("--software-context", action="store_true", help="Use OSMesa (requires GLFW 3.4+ and OSMesa)")
+    parser.add_argument("--profile-json", type=Path, help="Write CPU/GPU rendering stage timings in JSON")
     args = parser.parse_args()
     if not 1 <= args.fps <= 240 or not 0 <= args.crf <= 51:
         parser.error("fps must be 1–240 and crf 0–51")
@@ -140,6 +141,8 @@ def main():
                    "--fps", str(args.fps), "--duration", str(duration), "--impact-log", str(log)]
         if args.software_context:
             command.append("--software-context")
+        if args.profile_json:
+            command.extend(["--profile-output", str(args.profile_json.resolve())])
         renderer = subprocess.Popen(command, stdout=subprocess.PIPE)
         encoder = None
         try:
