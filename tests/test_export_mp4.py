@@ -56,6 +56,25 @@ class ExportMP4AudioTests(unittest.TestCase):
                 self.assertEqual(export_mp4.decode_music(source, target), 1.0)
                 runner.assert_called_once()
 
+    def test_decode_music_short_export_limits_ffmpeg_audio(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, target = root / "cinematic.mp3", root / "cinematic.wav"
+            source.touch()
+
+            def write_wav(command, check):
+                self.assertTrue(check)
+                self.assertEqual(command[command.index("-t") + 1], "3")
+                import wave
+                with wave.open(str(target), "wb") as audio:
+                    audio.setnchannels(2)
+                    audio.setsampwidth(2)
+                    audio.setframerate(48000)
+                    audio.writeframes(bytes(48000 * 3 * 4))
+
+            with patch.object(subprocess, "run", side_effect=write_wav):
+                self.assertEqual(export_mp4.decode_music(source, target, 3), 3.0)
+
 
 if __name__ == "__main__":
     unittest.main()
