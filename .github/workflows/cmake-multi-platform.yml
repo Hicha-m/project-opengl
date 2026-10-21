@@ -83,6 +83,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
           -DENABLE_RUNTIME_TESTS=${{ runner.os == 'Linux' && 'ON' || 'OFF' }}
+          -DENABLE_PROFILING=${{ matrix.os == 'ubuntu-24.04' && matrix.compiler == 'g++' && matrix.build_type == 'Release' && 'ON' || 'OFF' }}
       - name: Cache Windows dependencies
         if: runner.os == 'Windows'
         uses: actions/cache@v4
@@ -110,10 +111,11 @@ jobs:
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure
-      # Only one existing Linux Release job runs the 3-second end-to-end export.
+      # Only the existing Linux GCC Release job enables instrumentation and runs export.
+      # All distributable Clang/macOS/Windows builds compile without instrumentation.
       # No extra runner or compile pass; Mesa/Xvfb and FFmpeg are already installed.
       - name: Fast MP4 export and throughput profile
-        if: matrix.os == 'ubuntu-24.04' && matrix.compiler == 'clang++' && matrix.build_type == 'Release'
+        if: matrix.os == 'ubuntu-24.04' && matrix.compiler == 'g++' && matrix.build_type == 'Release'
         timeout-minutes: 4
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
