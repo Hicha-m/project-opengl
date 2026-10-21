@@ -42,12 +42,14 @@ def resource_directory(executable):
     raise RuntimeError("Audio resources missing; expected cinematic.mp3 and impact.wav")
 
 
-def decode_music(source, destination):
-    # The installed application contains MP3 music, not a generated cinematic.wav.
-    # Reuse FFmpeg (already required for MP4 export) to prepare a temporary PCM file.
-    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-                    "-i", str(source), "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le",
-                    str(destination)], check=True)
+def decode_music(source, destination, max_duration=None):
+    # Decode only the segment needed for short exports instead of the entire MP3.
+    # Full-length exports still decode the complete track.
+    command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+               "-i", str(source), "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le"]
+    if max_duration is not None:
+        command.extend(["-t", str(max_duration)])
+    subprocess.run(command + [str(destination)], check=True)
     with wave.open(str(destination), "rb") as audio:
         return audio.getnframes() / audio.getframerate()
 
@@ -129,7 +131,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="cinematic-export-", dir=output.parent) as temporary:
         temporary = Path(temporary)
         music_pcm = temporary / "cinematic.wav"
-        music_duration = decode_music(music, music_pcm)
+        music_duration = decode_music(music, music_pcm, args.duration)
         duration = args.duration if args.duration is not None else music_duration
         count = math.ceil(duration * args.fps)
         print(f"Export: {width} × {height}, {args.fps} fps, {duration:.2f} s, CRF {args.crf}, {args.preset}", flush=True)
