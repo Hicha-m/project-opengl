@@ -121,6 +121,13 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: '1'
           SDL_AUDIO_DRIVER: dummy
         run: xvfb-run -a python3 scripts/ci_export_profile.py
+      - name: Opening vs bombardment stage profile
+        if: matrix.os == 'ubuntu-24.04' && matrix.compiler == 'g++' && matrix.build_type == 'Release'
+        timeout-minutes: 3
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          SDL_AUDIO_DRIVER: dummy
+        run: xvfb-run -a python3 scripts/ci_heavy_profile.py
       - name: Create distributable package
         run: cpack --config build/cmake/CPackConfig.cmake -C ${{ matrix.build_type }} -B build/packages
       - name: Verify relocated Linux package
