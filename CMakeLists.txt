@@ -146,6 +146,17 @@ if(BUILD_TESTING)
             endif()
         endif()
     endforeach()
+
+    # Pure Python export tests need no GPU; skip registration if Python is absent.
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME export_mp4_python
+            COMMAND "${Python3_EXECUTABLE}" -m unittest discover
+                -s "${CMAKE_CURRENT_SOURCE_DIR}/tests" -p "test_export_mp4.py")
+        set_tests_properties(export_mp4_python PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            LABELS unit TIMEOUT 120)
+    endif()
 endif()
 
 if(APPLE)
