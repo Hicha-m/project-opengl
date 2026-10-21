@@ -99,11 +99,11 @@ def main():
                     f"| Export wall time | {elapsed:.2f}s |\n"
                     f"| Validation wall time | {verify_elapsed:.2f}s |\n"
                     f"| Export throughput | {EXPECTED_FRAMES / max(elapsed, 1e-9):.2f} frames/s |\n\n"
-                    "Timing is informational, not a failure threshold; Mesa software rendering is not representative of a hardware GPU.\\n\\n"
-                    "### Render-stage profiling (totals in milliseconds)\\n\\n"
-                    "| Stage | CPU wall (ms) | GPU elapsed (ms) |\\n|---|---:|---:|\\n"
-                    + "".join(f"| {name} | {cpu[name]:.3f} | {gpu[name]:.3f} |\\n" for name in stages)
-                    + f"\\nSimulation steps: {details['simulation_steps']}. GPU results come from deferred GL_TIME_ELAPSED queries; do not sum CPU and GPU timings.\\n")
+                    "Timing is informational, not a failure threshold; Mesa software rendering is not representative of a hardware GPU.\n\n"
+                    "### Render-stage profiling (totals in milliseconds)\n\n"
+                    "| Stage | CPU wall (ms) | GPU elapsed (ms) |\n|---|---:|---:|\n"
+                    + "".join(f"| {name} | {cpu[name]:.3f} | {gpu[name]:.3f} |\n" for name in stages)
+                    + f"\nSimulation steps: {details['simulation_steps']}. GPU results come from deferred GL_TIME_ELAPSED queries; do not sum CPU and GPU timings.\n")
 
 
 if __name__ == "__main__":
