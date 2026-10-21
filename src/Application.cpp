@@ -17,7 +17,7 @@ namespace
 } // namespace
 
 Application::Application(ApplicationOptions options)
-    : mOptions(options), mFPSCamera(glm::vec3(0, 3.5f, 10), glm::radians(110.0f), glm::radians(55.0f))
+    : mOptions(options), mProfiler(options.profile), mFPSCamera(glm::vec3(0, 3.5f, 10), glm::radians(110.0f), glm::radians(55.0f))
 {
 }
 
@@ -237,18 +237,24 @@ void Application::renderVideo(int width, int height, int fps, double duration,
         while (simulated < target)
         {
             const float step = static_cast<float>(std::min(1.0 / 60, target - simulated));
-            simulate(step, false);
+            { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::Simulation);
+              simulate(step, false); }
+            mProfiler.recordSimulationStep();
             simulated += step;
         }
-        mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture);
+        { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::TextureUpload);
+          mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture); }
         render();
-        glReadBuffer(GL_COLOR_ATTACHMENT0);
-        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+        { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::Readback);
+          glReadBuffer(GL_COLOR_ATTACHMENT0);
+          glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data()); }
         if (glGetError() != GL_NO_ERROR)
         {
             throw std::runtime_error("Video frame capture failed");
         }
-        writeFrame(pixels.data(), pixels.size());
+        { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::Output);
+          writeFrame(pixels.data(), pixels.size()); }
+        mProfiler.recordFrame();
         if (frame % fps == 0)
         {
             std::cerr << "Export: " << frame / fps << " / " << duration << " s\n";
@@ -414,14 +420,24 @@ void Application::render()
     mScene.findObject("Earth")->visible = !mEarthBreakupSystem.active();
     mScene.findObject("EarthClouds")->visible = !mEarthBreakupSystem.active();
     mScene.findObject("Earth")->material.setFloat("destructionLevel", mEarthDamageSystem.destructionLevel());
-    mRenderer.render(mScene, mLightManager, view, projection, position);
+    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Scene);
+      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Scene);
+      mRenderer.render(mScene, mLightManager, view, projection, position); }
     const auto core = mEarthBreakupSystem.coreCollider();
-    mMeteorSystem.render(mRenderer, mLightManager, view, projection, position,
-                         mEarthBreakupSystem.active() ? &core : nullptr);
-    mEarthBreakupSystem.render(mRenderer, mScene.findObject("Earth")->material, mLightManager, view,
-                               projection, position);
-    mParticleSystem.render(view, projection);
-    mHDR->finish();
+    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Meteors);
+      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Meteors);
+      mMeteorSystem.render(mRenderer, mLightManager, view, projection, position,
+                           mEarthBreakupSystem.active() ? &core : nullptr); }
+    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Breakup);
+      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Breakup);
+      mEarthBreakupSystem.render(mRenderer, mScene.findObject("Earth")->material, mLightManager, view,
+                                 projection, position); }
+    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Particles);
+      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Particles);
+      mParticleSystem.render(view, projection); }
+    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::HDR);
+      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::HDR);
+      mHDR->finish(); }
 }
 
 void Application::showFPS(double currentTime)
@@ -686,6 +702,7 @@ void Application::shutdown()
     mMeteorTrailEmitter.reset();
     mSolarSystem.reset(mScene);
     mEarthBreakupSystem.releaseGraphics();
+    mProfiler.release(); // Query objects require a live OpenGL context.
     mHDR.reset();
     mMeteorSystem.releaseGraphics();
     mParticleSystem.releaseGraphics();
