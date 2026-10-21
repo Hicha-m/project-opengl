@@ -22,6 +22,7 @@ namespace
         int width = 1280, height = 720, fps = 30;
         double duration = 110;
         std::string impactFile;
+        std::string profileFile;
     };
 
     CommandLineOptions parseArguments(int argc, char** argv)
@@ -70,12 +71,17 @@ namespace
             {
                 options.impactFile = value();
             }
+            else if (arg == "--profile-output")
+            {
+                options.profileFile = value();
+            }
             else
             {
                 throw std::runtime_error("Unknown argument: " + arg);
             }
         }
-        if ((options.softwareContext && !options.smokeTest && !options.exportFrames) ||
+        if ((!options.profileFile.empty() && !options.exportFrames) ||
+            (options.softwareContext && !options.smokeTest && !options.exportFrames) ||
             (options.smokeTest && options.exportFrames) || options.width <= 0 || options.height <= 0 ||
             options.width > 7680 || options.height > 4320 || options.fps <= 0 || options.fps > 240 ||
             !std::isfinite(options.duration) || options.duration <= 0 || options.duration > 3600)
@@ -102,6 +108,7 @@ namespace
                 }
             },
             [&](float time, float gain) { impacts << time << ' ' << gain << '\n'; });
+        if (!options.profileFile.empty()) app.writeProfileJson(options.profileFile);
         if (std::fflush(stdout) != 0 || !impacts)
         {
             throw std::runtime_error("Cannot finish video export");
@@ -155,6 +162,7 @@ int main(int argc, char** argv)
         options.height = command.smokeTest ? 480 : command.height;
         options.visible = !command.smokeTest && !command.exportFrames;
         options.music = !command.exportFrames;
+        options.profile = !command.profileFile.empty();
         Application app(options);
         if (!app.init())
         {
