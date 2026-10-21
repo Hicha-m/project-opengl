@@ -37,9 +37,19 @@ def default_executable():
 def resource_directory(executable):
     directory = executable.parent
     for candidate in (directory, directory.parent / "Resources", ROOT):
-        if (candidate / "build/music/cinematic.wav").is_file():
+        if (candidate / "build/music/cinematic.mp3").is_file() and (candidate / "build/music/impact.wav").is_file():
             return candidate
-    raise RuntimeError("Audio resources missing; build the project first")
+    raise RuntimeError("Audio resources missing; expected cinematic.mp3 and impact.wav")
+
+
+def decode_music(source, destination):
+    # The installed application contains MP3 music, not a generated cinematic.wav.
+    # Reuse FFmpeg (already required for MP4 export) to prepare a temporary PCM file.
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+                    "-i", str(source), "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le",
+                    str(destination)], check=True)
+    with wave.open(str(destination), "rb") as audio:
+        return audio.getnframes() / audio.getframerate()
 
 
 def read_pcm(path):
@@ -111,17 +121,18 @@ def main():
     if output.exists():
         parser.error(f"Output already exists: {output}; choose another filename")
     resources = resource_directory(executable)
-    music = resources / "build/music/cinematic.wav"
+    music = resources / "build/music/cinematic.mp3"
     impact = resources / "build/music/impact.wav"
-    with wave.open(str(music), "rb") as audio:
-        duration = args.duration or audio.getnframes() / audio.getframerate()
     width, height = args.resolution
-    count = math.ceil(duration * args.fps)
     output.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Export: {width} × {height}, {args.fps} fps, {duration:.2f} s, CRF {args.crf}, {args.preset}", flush=True)
-    # Temporary files contain compressed video and an audio mix, never raw frame sequences.
+    # Temporary files contain compressed video and audio, never raw video frame sequences.
     with tempfile.TemporaryDirectory(prefix="cinematic-export-", dir=output.parent) as temporary:
         temporary = Path(temporary)
+        music_pcm = temporary / "cinematic.wav"
+        music_duration = decode_music(music, music_pcm)
+        duration = args.duration if args.duration is not None else music_duration
+        count = math.ceil(duration * args.fps)
+        print(f"Export: {width} × {height}, {args.fps} fps, {duration:.2f} s, CRF {args.crf}, {args.preset}", flush=True)
         video, log = temporary / "video.mp4", temporary / "impacts.txt"
         command = [str(executable), "--export-frames", "--width", str(width), "--height", str(height),
                    "--fps", str(args.fps), "--duration", str(duration), "--impact-log", str(log)]
@@ -153,7 +164,7 @@ def main():
         else:
             effects = temporary / "effects.wav"
             mix_impacts(log, impact, effects, math.ceil(count / args.fps * 48000))
-            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-i", str(video), "-i", str(music), "-i", str(effects),
+            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-i", str(video), "-i", str(music_pcm), "-i", str(effects),
                 "-filter_complex", "[1:a]volume=0.7,apad[m];[m][2:a]amix=inputs=2:duration=longest:normalize=0[a]",
                 "-map", "0:v:0", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                 "-t", str(count / args.fps), "-movflags", "+faststart", str(temporary / "final.mp4")], check=True)
