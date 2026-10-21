@@ -22,7 +22,9 @@ namespace
         int width = 1280, height = 720, fps = 30;
         double duration = 110;
         std::string impactFile;
+#ifdef ENABLE_PROFILING
         std::string profileFile;
+#endif
     };
 
     CommandLineOptions parseArguments(int argc, char** argv)
@@ -71,17 +73,22 @@ namespace
             {
                 options.impactFile = value();
             }
+#ifdef ENABLE_PROFILING
             else if (arg == "--profile-output")
             {
                 options.profileFile = value();
             }
+#endif
             else
             {
                 throw std::runtime_error("Unknown argument: " + arg);
             }
         }
-        if ((!options.profileFile.empty() && !options.exportFrames) ||
-            (options.softwareContext && !options.smokeTest && !options.exportFrames) ||
+#ifdef ENABLE_PROFILING
+        if (!options.profileFile.empty() && !options.exportFrames)
+            throw std::runtime_error("Profiling requires --export-frames");
+#endif
+        if ((options.softwareContext && !options.smokeTest && !options.exportFrames) ||
             (options.smokeTest && options.exportFrames) || options.width <= 0 || options.height <= 0 ||
             options.width > 7680 || options.height > 4320 || options.fps <= 0 || options.fps > 240 ||
             !std::isfinite(options.duration) || options.duration <= 0 || options.duration > 3600)
@@ -108,7 +115,9 @@ namespace
                 }
             },
             [&](float time, float gain) { impacts << time << ' ' << gain << '\n'; });
+#ifdef ENABLE_PROFILING
         if (!options.profileFile.empty()) app.writeProfileJson(options.profileFile);
+#endif
         if (std::fflush(stdout) != 0 || !impacts)
         {
             throw std::runtime_error("Cannot finish video export");
@@ -162,7 +171,9 @@ int main(int argc, char** argv)
         options.height = command.smokeTest ? 480 : command.height;
         options.visible = !command.smokeTest && !command.exportFrames;
         options.music = !command.exportFrames;
+#ifdef ENABLE_PROFILING
         options.profile = !command.profileFile.empty();
+#endif
         Application app(options);
         if (!app.init())
         {
