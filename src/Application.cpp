@@ -6,6 +6,13 @@
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
+#ifdef ENABLE_PROFILING
+#define PROFILE_CPU(name, stage) FrameProfiler::CpuTimer name(mProfiler, ProfileStage::stage)
+#define PROFILE_GPU(name, stage) FrameProfiler::GpuTimer name(mProfiler, ProfileStage::stage)
+#else
+#define PROFILE_CPU(name, stage)
+#define PROFILE_GPU(name, stage)
+#endif
 #include <sstream>
 #include <stdexcept>
 
@@ -17,7 +24,11 @@ namespace
 } // namespace
 
 Application::Application(ApplicationOptions options)
-    : mOptions(options), mProfiler(options.profile), mFPSCamera(glm::vec3(0, 3.5f, 10), glm::radians(110.0f), glm::radians(55.0f))
+    : mOptions(options),
+#ifdef ENABLE_PROFILING
+      mProfiler(options.profile),
+#endif
+      mFPSCamera(glm::vec3(0, 3.5f, 10), glm::radians(110.0f), glm::radians(55.0f))
 {
 }
 
@@ -237,24 +248,28 @@ void Application::renderVideo(int width, int height, int fps, double duration,
         while (simulated < target)
         {
             const float step = static_cast<float>(std::min(1.0 / 60, target - simulated));
-            { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::Simulation);
+            { PROFILE_CPU(timer, Simulation);
               simulate(step, false); }
-            mProfiler.recordSimulationStep();
+    #ifdef ENABLE_PROFILING
+        mProfiler.recordSimulationStep();
+#endif
             simulated += step;
         }
-        { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::TextureUpload);
+        { PROFILE_CPU(timer, TextureUpload);
           mEarthDamageSystem.upload(mResources->earthDamageTexture, mResources->earthHeatTexture); }
         render();
-        { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::Readback);
+        { PROFILE_CPU(timer, Readback);
           glReadBuffer(GL_COLOR_ATTACHMENT0);
           glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data()); }
         if (glGetError() != GL_NO_ERROR)
         {
             throw std::runtime_error("Video frame capture failed");
         }
-        { FrameProfiler::CpuTimer timer(mProfiler, ProfileStage::Output);
+        { PROFILE_CPU(timer, Output);
           writeFrame(pixels.data(), pixels.size()); }
+#ifdef ENABLE_PROFILING
         mProfiler.recordFrame();
+#endif
         if (frame % fps == 0)
         {
             std::cerr << "Export: " << frame / fps << " / " << duration << " s\n";
@@ -420,23 +435,23 @@ void Application::render()
     mScene.findObject("Earth")->visible = !mEarthBreakupSystem.active();
     mScene.findObject("EarthClouds")->visible = !mEarthBreakupSystem.active();
     mScene.findObject("Earth")->material.setFloat("destructionLevel", mEarthDamageSystem.destructionLevel());
-    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Scene);
-      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Scene);
+    { PROFILE_CPU(cpu, Scene);
+      PROFILE_GPU(gpu, Scene);
       mRenderer.render(mScene, mLightManager, view, projection, position); }
     const auto core = mEarthBreakupSystem.coreCollider();
-    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Meteors);
-      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Meteors);
+    { PROFILE_CPU(cpu, Meteors);
+      PROFILE_GPU(gpu, Meteors);
       mMeteorSystem.render(mRenderer, mLightManager, view, projection, position,
                            mEarthBreakupSystem.active() ? &core : nullptr); }
-    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Breakup);
-      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Breakup);
+    { PROFILE_CPU(cpu, Breakup);
+      PROFILE_GPU(gpu, Breakup);
       mEarthBreakupSystem.render(mRenderer, mScene.findObject("Earth")->material, mLightManager, view,
                                  projection, position); }
-    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::Particles);
-      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::Particles);
+    { PROFILE_CPU(cpu, Particles);
+      PROFILE_GPU(gpu, Particles);
       mParticleSystem.render(view, projection); }
-    { FrameProfiler::CpuTimer cpu(mProfiler, ProfileStage::HDR);
-      FrameProfiler::GpuTimer gpu(mProfiler, ProfileStage::HDR);
+    { PROFILE_CPU(cpu, HDR);
+      PROFILE_GPU(gpu, HDR);
       mHDR->finish(); }
 }
 
@@ -702,7 +717,9 @@ void Application::shutdown()
     mMeteorTrailEmitter.reset();
     mSolarSystem.reset(mScene);
     mEarthBreakupSystem.releaseGraphics();
+#ifdef ENABLE_PROFILING
     mProfiler.release(); // Query objects require a live OpenGL context.
+#endif
     mHDR.reset();
     mMeteorSystem.releaseGraphics();
     mParticleSystem.releaseGraphics();
