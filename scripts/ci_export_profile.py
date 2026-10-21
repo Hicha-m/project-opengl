@@ -53,10 +53,12 @@ def main():
         raise RuntimeError(f"Missing executable: {executable}")
     with tempfile.TemporaryDirectory(prefix="opengl-mp4-smoke-") as directory:
         output = Path(directory) / "smoke.mp4"
+        profile = Path(directory) / "render-profile.json"
         args = [sys.executable, str(ROOT / "tools/export_mp4.py"),
                 "--executable", str(executable), "--duration", str(DURATION),
                 "--resolution", f"{WIDTH}x{HEIGHT}", "--fps", str(FPS),
-                "--preset", "ultrafast", "--crf", "35", "--output", str(output)]
+                "--preset", "ultrafast", "--crf", "35", "--output", str(output),
+                "--profile-json", str(profile)]
         begin = time.perf_counter()
         export = run(*args)
         elapsed = time.perf_counter() - begin
@@ -66,11 +68,25 @@ def main():
         duration = validate_mp4(output)
         verify_elapsed = time.perf_counter() - verify_begin
         size = output.stat().st_size
+        details = json.loads(profile.read_text(encoding="utf-8"))
+        if details["frames"] != EXPECTED_FRAMES or details["simulation_steps"] <= 0:
+            raise RuntimeError(f"Unexpected profiling counts: {details}")
+        stages = ("simulation", "texture_upload", "scene", "meteors", "breakup",
+                  "particles", "hdr", "readback", "output")
+        cpu = details["cpu_ms"]
+        gpu = details["gpu_ms"]
+        for name in stages:
+            if name not in cpu or name not in gpu or cpu[name] < 0 or gpu[name] < 0:
+                raise RuntimeError(f"Invalid stage timing: {name}")
         print(export.stdout)
         print(f"MP4 smoke: {EXPECTED_FRAMES} frames, {WIDTH}x{HEIGHT}, "
               f"{duration:.2f}s, {size} bytes")
         print(f"Export wall time: {elapsed:.2f}s; validation wall time: {verify_elapsed:.2f}s")
         print(f"Export throughput: {EXPECTED_FRAMES / max(elapsed, 1e-9):.2f} frames/s (includes startup, simulation, CPU OpenGL rendering, encoding and mixing)")
+        print("Stage timings (ms total; CPU is GL submission/wait, GPU is GL_TIME_ELAPSED):")
+        for name in stages:
+            print(f"  {name:16s} CPU {cpu[name]:9.3f} GPU {gpu[name]:9.3f}")
+        print(f"Simulation steps: {details['simulation_steps']}")
         summary = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary:
             with open(summary, "a", encoding="utf-8") as output_summary:
@@ -83,7 +99,11 @@ def main():
                     f"| Export wall time | {elapsed:.2f}s |\n"
                     f"| Validation wall time | {verify_elapsed:.2f}s |\n"
                     f"| Export throughput | {EXPECTED_FRAMES / max(elapsed, 1e-9):.2f} frames/s |\n\n"
-                    "Timing is informational, not a failure threshold; Mesa software rendering is not representative of a hardware GPU.\n")
+                    "Timing is informational, not a failure threshold; Mesa software rendering is not representative of a hardware GPU.\\n\\n"
+                    "### Render-stage profiling (totals in milliseconds)\\n\\n"
+                    "| Stage | CPU wall (ms) | GPU elapsed (ms) |\\n|---|---:|---:|\\n"
+                    + "".join(f"| {name} | {cpu[name]:.3f} | {gpu[name]:.3f} |\\n" for name in stages)
+                    + f"\\nSimulation steps: {details['simulation_steps']}. GPU results come from deferred GL_TIME_ELAPSED queries; do not sum CPU and GPU timings.\\n")
 
 
 if __name__ == "__main__":
