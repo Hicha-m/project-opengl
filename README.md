@@ -67,7 +67,7 @@ or `project` on Linux. Keep the resources and bundled libraries together.
 You can move the extracted directory and launch it from another working directory,
 including paths containing spaces and non-ASCII characters.
 
-Packages contain MP3 music and the short impact WAV; **FFmpeg is needed only when building**.
+Packages contain MP3 music and the short impact WAV. **FFmpeg is needed when building or exporting MP4**, but not for regular playback.
 SDL3 handles music and impact playback through the host's default audio device.
 The application reports unavailable audio and can continue without sound.
 Do not set `SDL_AUDIO_DRIVER=dummy` when you want audible playback.
@@ -194,7 +194,7 @@ python3 tools/export_mp4.py --resolution 640x360 --duration 5 --output exports/p
 ```
 
 On Windows, use `python` instead of `python3` if necessary.
-The default export is `exports/cinematic.mp4`, at 1280×720 and 30 fps, with
+The exporter decodes the bundled `cinematic.mp3` into a temporary WAV for mixing; no pre-generated `cinematic.wav` is needed. The default export is `exports/cinematic.mp4`, at 1280×720 and 30 fps, with
 H.264 video and AAC audio. It includes the complete music and meteor impact
 sounds with distance attenuation. Frames are simulated at fixed time steps,
 so rendering speed does not alter the film's playback speed or audio timing.
@@ -257,7 +257,7 @@ pull requests, version-tag pushes (`1.0.0` or `v1.0.0`) and manual triggers:
 
 - Debug and Release builds with Clang on Linux and macOS Apple Silicon, plus
   Linux GCC, Linux ARM64, macOS Intel and Windows MSVC builds.
-- Fourteen CPU/audio/resource tests, including executable-relative loading
+- Fifteen CPU/audio/resource/export tests (when Python is available), including executable-relative loading
   and MP3 music / WAV impact playback from Unicode paths.
 - The complete OpenGL integration suite on Linux with Xvfb and Mesa.
 - Package extraction and scene/audio/rendering startup on every desktop target
