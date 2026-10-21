@@ -3,6 +3,7 @@
 #include "audio/MusicPlayer.h"
 #include "camera/CinematicCamera.h"
 #include "graphics/HDRPipeline.h"
+#include "profiling/FrameProfiler.h"
 #include "graphics/Renderer.h"
 #include "scene/LightManager.h"
 #include "scene/Scene.h"
@@ -29,6 +30,7 @@ struct ApplicationOptions
     bool visible = true;
     bool music = true;
     bool softwareContext = false; // Headless OSMesa verification, no desktop GPU required.
+    bool profile = false; // Opt-in offline video profiling.
 };
 
 // Owns the window and resources; advances the cinematic, simulation and rendering.
@@ -46,6 +48,7 @@ public:
                      const std::function<void(const unsigned char*, std::size_t)>& writeFrame,
                      const std::function<void(float, float)>& writeImpact);
     void shutdown();
+    void writeProfileJson(const std::string& path) const { mProfiler.writeJson(path); }
     void restartSequence();
     void seekSequence(float seconds);
     void setPlaybackRate(float rate);
@@ -79,6 +82,7 @@ private:
     std::function<void(float, float)> mExportImpact;
     float mExportLastImpact = -1;
     ApplicationOptions mOptions;
+    FrameProfiler mProfiler;
     GLFWwindow* mWindow = nullptr;
     int mWindowedX = 100;
     int mWindowedY = 100;
