@@ -50,7 +50,7 @@ class ExportMP4AudioTests(unittest.TestCase):
                     audio.setnchannels(2)
                     audio.setsampwidth(2)
                     audio.setframerate(48000)
-                    audio.writeframes(b"\\x00" * 48000 * 4)
+                    audio.writeframes(b"\x00" * 48000 * 4)
 
             with patch.object(subprocess, "run", side_effect=write_wav) as runner:
                 self.assertEqual(export_mp4.decode_music(source, target), 1.0)
