@@ -6,12 +6,11 @@ on:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+'
-  paths-ignore:
+    paths-ignore:
       - '**.md'
       - 'docs/**'
       - '.gitignore'
       - 'LICENSE'
-      - '**.yml'
   pull_request:
     paths-ignore:
       - '**.md'
