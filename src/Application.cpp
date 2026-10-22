@@ -187,11 +187,7 @@ void Application::run(std::size_t frameLimit)
 
 void Application::renderVideo(int width, int height, int fps, double duration,
                               const std::function<void(const unsigned char*, std::size_t)>& writeFrame,
-                              const std::function<void(float, float)>& writeImpact
-#ifdef ENABLE_PROFILING
-                              , double profileStart
-#endif
-                              )
+                              const std::function<void(float, float)>& writeImpact)
 {
     if (!mInitialized || width <= 0 || height <= 0 || fps <= 0 || !std::isfinite(duration) || duration <= 0)
     {
@@ -200,13 +196,7 @@ void Application::renderVideo(int width, int height, int fps, double duration,
     glfwSetKeyCallback(mWindow, nullptr);
     glfwSetFramebufferSizeCallback(mWindow, nullptr);
     mMusic.setPaused(true);
-    double startTime = 0.0;
-#ifdef ENABLE_PROFILING
-    if (!std::isfinite(profileStart) || profileStart < 0 || profileStart + duration > MainSequence::Duration)
-        throw std::runtime_error("Invalid profiling timeline window");
-    startTime = profileStart;
-#endif
-    mTimeline.setDuration(static_cast<float>(startTime > 0 ? MainSequence::Duration : duration));
+    mTimeline.setDuration(static_cast<float>(duration));
     resetSequenceState();
     mFPSMode = mWireframe = false;
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -241,20 +231,12 @@ void Application::renderVideo(int width, int height, int fps, double duration,
     }
     onFramebufferSize(width, height);
     glfwSwapInterval(0);
-    // Advance every fixed physics step before the timed segment, without rendering or
-    // recording profiler timings. This preserves emissions, impacts and scene history.
-    double simulated = 0.0;
-    while (simulated < startTime)
-    {
-        const float step = static_cast<float>(std::min(1.0 / 60, startTime - simulated));
-        simulate(step, false);
-        simulated += step;
-    }
     mExportImpact = writeImpact;
     mExportLastImpact = -1;
     std::vector<unsigned char> pixels(std::size_t(width) * height * 3);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     const std::size_t count = static_cast<std::size_t>(std::ceil(duration * fps));
+    double simulated = 0;
     for (std::size_t frame = 0; frame < count; ++frame)
     {
         glfwPollEvents();
@@ -262,7 +244,7 @@ void Application::renderVideo(int width, int height, int fps, double duration,
         {
             throw std::runtime_error("Video export cancelled");
         }
-        const double target = startTime + double(frame) / fps;
+        const double target = double(frame) / fps;
         while (simulated < target)
         {
             const float step = static_cast<float>(std::min(1.0 / 60, target - simulated));
