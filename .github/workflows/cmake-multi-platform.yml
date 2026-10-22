@@ -48,13 +48,36 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        timeout-minutes: 8
+        timeout-minutes: 12
         env:
           DEBIAN_FRONTEND: noninteractive
+        shell: bash
         run: |
-          # APT network stalls must not hang one matrix job for 45 minutes.
-          sudo apt-get -o Acquire::Retries=3             -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=3             -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30             install -y --no-install-recommends             ninja-build libgl1-mesa-dev libglfw3-dev libglm-dev ffmpeg xvfb xauth
+          set -euo pipefail
+          # The Azure Ubuntu mirror has been stalling on x86 GitHub runners.
+          # Switch to the signed official Ubuntu archive if the mirror list exists.
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
+          # Avoid downloading tools already included in the runner image.
+          packages=(libgl1-mesa-dev libglfw3-dev libglm-dev)
+          command -v ninja >/dev/null || packages+=(ninja-build)
+          command -v ffmpeg >/dev/null || packages+=(ffmpeg)
+          command -v Xvfb >/dev/null || packages+=(xvfb)
+          command -v xauth >/dev/null || packages+=(xauth)
+          missing=()
+          for package in "${packages[@]}"; do
+            if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then
+              missing+=("$package")
+            fi
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Installing required Ubuntu packages: %s\n' "${missing[*]}"
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends "${missing[@]}"
+          else
+            echo "Required Linux dependencies are already installed."
+          fi
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install ninja glfw glm ffmpeg bison flex
@@ -77,11 +100,12 @@ jobs:
       - name: Install SDL3
         if: runner.os != 'Windows'
         timeout-minutes: 12
-        # setup-sdl caches its own build; avoid a redundant actions/cache entry.
+        # setup-sdl already caches SDL. Avoid its large Linux dependency
+        # installation even on cache hits; use the minimal setup above.
         uses: libsdl-org/setup-sdl@v1
         with:
           version: 3.2.10
-          install-linux-dependencies: true
+          install-linux-dependencies: false
       - name: Configure Unix
         if: runner.os != 'Windows'
         run: >-
