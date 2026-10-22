@@ -158,6 +158,10 @@ void HDRPipeline::finish(bool bloom
 #endif
 )
 {
+    #ifdef ENABLE_PROFILING
+    FrameProfiler disabledProfiler;
+    FrameProfiler& phaseProfiler = profiler ? *profiler : disabledProfiler;
+    #endif
     GLint program, vao, active, binding[2], polygon[2];
     glGetIntegerv(GL_CURRENT_PROGRAM, &program);
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
@@ -177,8 +181,8 @@ void HDRPipeline::finish(bool bloom
     glBindVertexArray(mVAO);
     {
 #ifdef ENABLE_PROFILING
-    FrameProfiler::CpuTimer cpu(*profiler, ProfileStage::BrightExtract);
-    FrameProfiler::GpuTimer gpu(*profiler, ProfileStage::BrightExtract);
+    FrameProfiler::CpuTimer cpu(phaseProfiler, ProfileStage::BrightExtract);
+    FrameProfiler::GpuTimer gpu(phaseProfiler, ProfileStage::BrightExtract);
 #endif
     glViewport(0, 0, std::max(1, mWidth / 2), std::max(1, mHeight / 2));
     glBindFramebuffer(GL_FRAMEBUFFER, mFBO[0]);
@@ -193,8 +197,8 @@ void HDRPipeline::finish(bool bloom
     }
     {
 #ifdef ENABLE_PROFILING
-    FrameProfiler::CpuTimer cpu(*profiler, ProfileStage::BloomBlur);
-    FrameProfiler::GpuTimer gpu(*profiler, ProfileStage::BloomBlur);
+    FrameProfiler::CpuTimer cpu(phaseProfiler, ProfileStage::BloomBlur);
+    FrameProfiler::GpuTimer gpu(phaseProfiler, ProfileStage::BloomBlur);
 #endif
     for (int pass = 0; pass < 8; ++pass)
     {
@@ -209,8 +213,8 @@ void HDRPipeline::finish(bool bloom
     }
     {
 #ifdef ENABLE_PROFILING
-    FrameProfiler::CpuTimer cpu(*profiler, ProfileStage::ToneMapping);
-    FrameProfiler::GpuTimer gpu(*profiler, ProfileStage::ToneMapping);
+    FrameProfiler::CpuTimer cpu(phaseProfiler, ProfileStage::ToneMapping);
+    FrameProfiler::GpuTimer gpu(phaseProfiler, ProfileStage::ToneMapping);
 #endif
     glBindFramebuffer(GL_FRAMEBUFFER, mDestination);
     glViewport(mViewport[0], mViewport[1], mViewport[2], mViewport[3]);
