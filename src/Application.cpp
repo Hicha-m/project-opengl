@@ -469,8 +469,11 @@ void Application::render()
       PROFILE_GPU(gpu, Particles);
       mParticleSystem.render(view, projection); }
     { PROFILE_CPU(cpu, HDR);
-      PROFILE_GPU(gpu, HDR);
-      mHDR->finish(); }
+      mHDR->finish(true
+#ifdef ENABLE_PROFILING
+                   , &mProfiler
+#endif
+      ); }
 }
 
 void Application::showFPS(double currentTime)
