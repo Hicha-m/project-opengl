@@ -1,5 +1,8 @@
 #pragma once
 #include "graphics/ShaderProgram.h"
+#ifdef ENABLE_PROFILING
+#include "profiling/FrameProfiler.h"
+#endif
 
 // RGBA16F scene -> bright extraction -> separable blur -> tone mapped composite.
 // Owns GL resources; init/release/destruction require a current context.
@@ -12,7 +15,11 @@ public:
     HDRPipeline& operator=(const HDRPipeline&) = delete;
     bool init(int width, int height);
     bool begin(int width, int height);
-    void finish(bool bloom = true);
+    void finish(bool bloom = true
+#ifdef ENABLE_PROFILING
+                , FrameProfiler* profiler = nullptr
+#endif
+    );
     void release();
 
 private:

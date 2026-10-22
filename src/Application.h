@@ -50,7 +50,11 @@ public:
     void run(std::size_t frameLimit = 0); // zero: run until window closes
     void renderVideo(int width, int height, int fps, double duration,
                      const std::function<void(const unsigned char*, std::size_t)>& writeFrame,
-                     const std::function<void(float, float)>& writeImpact);
+                     const std::function<void(float, float)>& writeImpact
+#ifdef ENABLE_PROFILING
+                     , double profileStart = 0.0
+#endif
+                     );
     void shutdown();
 #ifdef ENABLE_PROFILING
     void writeProfileJson(const std::string& path) const { mProfiler.writeJson(path); }

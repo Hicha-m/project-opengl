@@ -12,7 +12,7 @@
 
 enum class ProfileStage : std::size_t
 {
-    Simulation, TextureUpload, Scene, Meteors, Breakup, Particles, HDR, Readback, Output, Count
+    Simulation, TextureUpload, Scene, Meteors, Breakup, Particles, HDR, BrightExtract, BloomBlur, ToneMapping, Readback, Output, Count
 };
 
 class FrameProfiler
@@ -21,7 +21,7 @@ public:
     static constexpr std::size_t StageCount = static_cast<std::size_t>(ProfileStage::Count);
     static constexpr std::array<const char*, StageCount> Names{{
         "simulation", "texture_upload", "scene", "meteors", "breakup",
-        "particles", "hdr", "readback", "output"
+        "particles", "hdr", "bright_extract", "bloom_blur", "tone_mapping", "readback", "output"
     }};
 
     explicit FrameProfiler(bool enabled = false) : mEnabled(enabled) {}
@@ -106,6 +106,19 @@ public:
                 GLuint64 elapsed = 0;
                 glGetQueryObjectui64v(query, GL_QUERY_RESULT, &elapsed);
                 totalMs += double(elapsed) / 1000000.0;
+            }
+            // HDR is the sum of its non-overlapping GPU phases (nested GL_TIME_ELAPSED queries are invalid).
+            if (i == static_cast<std::size_t>(ProfileStage::HDR))
+            {
+                for (const auto phase : {ProfileStage::BrightExtract, ProfileStage::BloomBlur, ProfileStage::ToneMapping})
+                {
+                    for (GLuint query : mGpuQueries[static_cast<std::size_t>(phase)])
+                    {
+                        GLuint64 elapsed = 0;
+                        glGetQueryObjectui64v(query, GL_QUERY_RESULT, &elapsed);
+                        totalMs += double(elapsed) / 1000000.0;
+                    }
+                }
             }
             output << "    \"" << Names[i] << "\": " << totalMs
                    << (i + 1 == StageCount ? "\n" : ",\n");

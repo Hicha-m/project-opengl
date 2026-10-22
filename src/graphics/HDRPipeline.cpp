@@ -152,8 +152,16 @@ bool HDRPipeline::begin(int width, int height)
     return true;
 }
 
-void HDRPipeline::finish(bool bloom)
+void HDRPipeline::finish(bool bloom
+#ifdef ENABLE_PROFILING
+                         , FrameProfiler* profiler
+#endif
+)
 {
+    #ifdef ENABLE_PROFILING
+    FrameProfiler disabledProfiler;
+    FrameProfiler& phaseProfiler = profiler ? *profiler : disabledProfiler;
+    #endif
     GLint program, vao, active, binding[2], polygon[2];
     glGetIntegerv(GL_CURRENT_PROGRAM, &program);
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
@@ -171,6 +179,11 @@ void HDRPipeline::finish(bool bloom)
     glDisable(GL_CULL_FACE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glBindVertexArray(mVAO);
+    {
+#ifdef ENABLE_PROFILING
+    FrameProfiler::CpuTimer cpu(phaseProfiler, ProfileStage::BrightExtract);
+    FrameProfiler::GpuTimer gpu(phaseProfiler, ProfileStage::BrightExtract);
+#endif
     glViewport(0, 0, std::max(1, mWidth / 2), std::max(1, mHeight / 2));
     glBindFramebuffer(GL_FRAMEBUFFER, mFBO[0]);
     mBright.use();
@@ -181,6 +194,12 @@ void HDRPipeline::finish(bool bloom)
     glBindTexture(GL_TEXTURE_2D, mScene);
     mBright.setUniform("source", 0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+    {
+#ifdef ENABLE_PROFILING
+    FrameProfiler::CpuTimer cpu(phaseProfiler, ProfileStage::BloomBlur);
+    FrameProfiler::GpuTimer gpu(phaseProfiler, ProfileStage::BloomBlur);
+#endif
     for (int pass = 0; pass < 8; ++pass)
     {
         int target = (pass + 1) % 2, source = pass % 2;
@@ -191,6 +210,12 @@ void HDRPipeline::finish(bool bloom)
         mBlur.setUniform("axis", glm::vec2(pass % 2 ? 0.0f : 1.0f, pass % 2 ? 1.0f : 0.0f));
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
+    }
+    {
+#ifdef ENABLE_PROFILING
+    FrameProfiler::CpuTimer cpu(phaseProfiler, ProfileStage::ToneMapping);
+    FrameProfiler::GpuTimer gpu(phaseProfiler, ProfileStage::ToneMapping);
+#endif
     glBindFramebuffer(GL_FRAMEBUFFER, mDestination);
     glViewport(mViewport[0], mViewport[1], mViewport[2], mViewport[3]);
     mComposite.use();
@@ -202,6 +227,7 @@ void HDRPipeline::finish(bool bloom)
     mComposite.setUniform("bloom", 1);
     mComposite.setUniform("bloomEnabled", int(bloom));
     glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
     for (int i = 0; i < 2; ++i)
     {
         glActiveTexture(GL_TEXTURE0 + i);

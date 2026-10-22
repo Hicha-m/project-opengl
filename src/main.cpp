@@ -24,6 +24,7 @@ namespace
         std::string impactFile;
 #ifdef ENABLE_PROFILING
         std::string profileFile;
+        double profileStart = 0.0;
 #endif
     };
 
@@ -78,6 +79,10 @@ namespace
             {
                 options.profileFile = value();
             }
+            else if (arg == "--profile-start")
+            {
+                options.profileStart = std::stod(value());
+            }
 #endif
             else
             {
@@ -87,6 +92,9 @@ namespace
 #ifdef ENABLE_PROFILING
         if (!options.profileFile.empty() && !options.exportFrames)
             throw std::runtime_error("Profiling requires --export-frames");
+        if (!std::isfinite(options.profileStart) || options.profileStart < 0 ||
+            (options.profileStart > 0 && options.profileFile.empty()))
+            throw std::runtime_error("--profile-start requires --profile-output and a nonnegative time");
 #endif
         if ((options.softwareContext && !options.smokeTest && !options.exportFrames) ||
             (options.smokeTest && options.exportFrames) || options.width <= 0 || options.height <= 0 ||
@@ -114,7 +122,11 @@ namespace
                     throw std::runtime_error("Cannot write video frame");
                 }
             },
-            [&](float time, float gain) { impacts << time << ' ' << gain << '\n'; });
+            [&](float time, float gain) { impacts << time << ' ' << gain << '\n'; }
+#ifdef ENABLE_PROFILING
+            , options.profileStart
+#endif
+            );
 #ifdef ENABLE_PROFILING
         if (!options.profileFile.empty()) app.writeProfileJson(options.profileFile);
 #endif
