@@ -34,18 +34,3 @@ These timings are diagnostic only: Mesa's software renderer does not represent d
 ## Limits
 
 A three-second opening segment does not measure high-load meteor shower or Earth breakup scenes. Investigate those with a longer local profiling render before drawing optimization conclusions. Never compare measured GPU milliseconds from Mesa directly to physical GPUs.
-
-
-## High-load benchmark (separate from packaged application)
-
-Use `scripts/ci_heavy_profile.py` with an `ENABLE_PROFILING=ON` build to compare two **2-second** windows: opening (0–2s) and bombardment (48–50s). It simulates every 1/60-second step from the start to the late window before collecting timed frames, so it preserves meteor and particle history instead of simply jumping the animation clock. Pre-roll is excluded from section timings.
-
-```bash
-cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_PROFILING=ON
-cmake --build build/cmake --parallel 2
-LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a python3 scripts/ci_heavy_profile.py
-```
-
-The script discards RGB frames rather than encoding video, avoiding FFmpeg and audio costs for these GPU/CPU stage comparisons. It reports end-to-end wall time **including** simulated pre-roll separately from the per-stage results, and adds an opening-versus-bombardment table to the GitHub Actions job summary. The short MP4 smoke test remains unchanged.
-
-The `--profile-start` renderer argument exists **only** in profiling builds, requires `--profile-output`, and does not affect production builds or normal exported MP4s. Do not interpret a slow pre-roll as slow per-frame rendering. As before, Mesa measurements are diagnostic only.
