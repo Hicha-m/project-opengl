@@ -49,3 +49,9 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a python3 scripts/ci_heavy_profile.py
 The script discards RGB frames rather than encoding video, avoiding FFmpeg and audio costs for these GPU/CPU stage comparisons. It reports end-to-end wall time **including** simulated pre-roll separately from the per-stage results, and adds an opening-versus-bombardment table to the GitHub Actions job summary. The short MP4 smoke test remains unchanged.
 
 The `--profile-start` renderer argument exists **only** in profiling builds, requires `--profile-output`, and does not affect production builds or normal exported MP4s. Do not interpret a slow pre-roll as slow per-frame rendering. As before, Mesa measurements are diagnostic only.
+
+## HDR phase breakdown (benchmark branch only)
+
+When built with `ENABLE_PROFILING=ON`, the report includes `bright_extract`, `bloom_blur`, and `tone_mapping` CPU/GPU stages. The existing `hdr` CPU stage covers the complete `finish()` call; its GPU total is the **sum of the three non-overlapping phase queries** rather than a nested timer query. This avoids invalid nested `GL_TIME_ELAPSED` queries. `hdr` CPU includes OpenGL state saving/restoration that is outside the three narrower phases; the phase totals should not be interpreted as the whole CPU cost.
+
+The default production build (`ENABLE_PROFILING=OFF`) compiles out the extra timers. Queries add their own overhead (particularly on Mesa software GL); compare runs with consistent settings and do not interpret short empty draws as reliable physical GPU times. No bloom shader, pass count, output or rendering behavior is changed by this instrumentation.
