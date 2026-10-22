@@ -48,9 +48,13 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libgl1-mesa-dev libglfw3-dev libglm-dev ffmpeg xvfb xauth
+          # APT network stalls must not hang one matrix job for 45 minutes.
+          sudo apt-get -o Acquire::Retries=3             -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3             -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30             install -y --no-install-recommends             ninja-build libgl1-mesa-dev libglfw3-dev libglm-dev ffmpeg xvfb xauth
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install ninja glfw glm ffmpeg bison flex
@@ -72,7 +76,9 @@ jobs:
           key: osmesa-${{ matrix.os }}-24.3.4-softpipe-v1
       - name: Install SDL3
         if: runner.os != 'Windows'
-        uses: libsdl-org/setup-sdl@main
+        timeout-minutes: 12
+        # setup-sdl caches its own build; avoid a redundant actions/cache entry.
+        uses: libsdl-org/setup-sdl@v1
         with:
           version: 3.2.10
           install-linux-dependencies: true
