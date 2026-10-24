@@ -6,10 +6,10 @@ This project has two levels of verification in the same GitHub Actions workflow:
 
 | Trigger | Matrix | OpenGL smoke | MP4 export | Packages and Docker |
 |---|---|---|---|---|
-| Pull request | Linux GCC Release, Linux Clang Debug, macOS 14 Release, Windows 2022 Release | Linux (Mesa + Xvfb) | Linux GCC Release (H.264 + AAC validated with FFmpeg) | Omitted for fast feedback |
+| Pull request | Linux GCC Release, Linux Clang Debug, macOS 14 Release, Windows 2022 Release | Linux GCC Release (Mesa + Xvfb) | Linux GCC Release (H.264 + AAC validated with FFmpeg) | Omitted for fast feedback |
 | Push to `master`, version tag, or manual `workflow_dispatch` | All 9 OS/compiler/configuration combinations | All Linux builds | Linux GCC Release | Package relocation on each OS; Docker build/test; signed release package artifacts |
 
-All matrix jobs run **real C++ unit tests** through CTest. Linux additionally runs the hidden-window OpenGL integration test, which initializes rendering, music and impact audio and draws frames. Linux GCC Release verifies an actual exported MP4 (36 frames, audio/video streams, duration, full FFmpeg decode), rather than only compiling the project.
+All matrix jobs run **real C++ unit tests** through CTest. Linux GCC Release additionally runs the hidden-window OpenGL integration test on PRs, which initializes rendering, music and impact audio and draws frames. The full release matrix runs this test on **all** Linux targets. Linux GCC Release verifies an actual exported MP4 (36 frames, audio/video streams, duration, full FFmpeg decode), rather than only compiling the project.
 
 A Pull Request is **not** equivalent to a release validation: the complete 9-target matrix, packaged application relocation and Docker are deliberately retained for `master`, tags and manual runs. Running `workflow_dispatch` provides a full verification pass without merging a PR. A Draft PR is sufficient to trigger the fast checks.
 
@@ -42,7 +42,7 @@ python3 scripts/ci_metrics.py --jobs-json /path/to/jobs-api-response.json \
 
 Previous runs on 22 October 2026 were dominated by APT and SDL setup, not by C++ compilation. The workflow now selects only missing Linux packages, bypasses the repeatedly slow Azure Ubuntu mirror, disables SDL's redundant installation of system packages, and reuses the built-in SDL cache. The Linux dependency fix was already validated in the experimental PR #13.
 
-On PRs, this version avoids **five of nine** matrix jobs, avoids Docker's second C++/OpenGL build, skips the macOS OSMesa package-verification renderer setup and skips the Windows Mesa package verification download. The primary C++ tests and actual Linux rendering smoke remain active. The reduction in wall-clock time must be measured from actual runs, not inferred from job count alone.
+On PRs, this version avoids **five of nine** matrix jobs, avoids Docker's second C++/OpenGL build, skips the macOS OSMesa package-verification renderer setup and skips the Windows Mesa package verification download. It also avoids a redundant OpenGL runtime test on PR Clang Debug, while retaining the Clang Debug compile and C++ unit tests; the slower redundant runtime check remains enabled for the full release matrix. The primary C++ tests and actual Linux rendering smoke remain active. The reduction in wall-clock time must be measured from actual runs, not inferred from job count alone.
 
 ## Local verification
 
