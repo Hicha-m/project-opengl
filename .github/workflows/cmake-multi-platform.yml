@@ -34,9 +34,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # PRs: representative compilers + real OpenGL/MP4 smoke on Linux.
+        # PRs: Linux-only Debug/Release validation while the performance baseline stabilizes.
         # master, release tags and manual dispatch: complete 9-job portability matrix.
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Debug"},{"os":"ubuntu-24.04","compiler":"g++","build_type":"Release"},{"os":"macos-14","compiler":"clang++","build_type":"Release"},{"os":"windows-2022","compiler":"MSVC","build_type":"Release"}]' || '[{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Debug"},{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Release"},{"os":"ubuntu-24.04","compiler":"g++","build_type":"Release"},{"os":"ubuntu-24.04-arm","compiler":"g++","build_type":"Release"},{"os":"macos-14","compiler":"clang++","build_type":"Debug"},{"os":"macos-14","compiler":"clang++","build_type":"Release"},{"os":"macos-15-intel","compiler":"clang++","build_type":"Release"},{"os":"windows-2022","compiler":"MSVC","build_type":"Debug"},{"os":"windows-2022","compiler":"MSVC","build_type":"Release"}]') }}
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Debug"},{"os":"ubuntu-24.04","compiler":"g++","build_type":"Release"}]' || '[{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Debug"},{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Release"},{"os":"ubuntu-24.04","compiler":"g++","build_type":"Release"},{"os":"ubuntu-24.04-arm","compiler":"g++","build_type":"Release"},{"os":"macos-14","compiler":"clang++","build_type":"Debug"},{"os":"macos-14","compiler":"clang++","build_type":"Release"},{"os":"macos-15-intel","compiler":"clang++","build_type":"Release"},{"os":"windows-2022","compiler":"MSVC","build_type":"Debug"},{"os":"windows-2022","compiler":"MSVC","build_type":"Release"}]') }}
     steps:
       - uses: actions/checkout@v6
       - name: Install Linux dependencies
@@ -120,26 +120,49 @@ jobs:
           -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
           -DENABLE_RUNTIME_TESTS=${{ runner.os == 'Linux' && 'ON' || 'OFF' }}
           -DENABLE_PROFILING=${{ matrix.os == 'ubuntu-24.04' && matrix.compiler == 'g++' && matrix.build_type == 'Release' && 'ON' || 'OFF' }}
-      - name: Cache Windows dependencies
+      - name: Cache Windows vcpkg binary archives
         if: runner.os == 'Windows'
         uses: actions/cache@v4
         with:
-          path: build/cmake/vcpkg_installed
-          key: vcpkg-windows-static-${{ hashFiles('vcpkg.json') }}
+          # Cache relocatable vcpkg binary archives, not the build tree or an
+          # installed directory tied to a previous CMake configuration.
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: vcpkg-binaries-v1-${{ runner.os }}-x64-windows-static-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-binaries-v1-${{ runner.os }}-x64-windows-static-
       - name: Configure Windows
         if: runner.os == 'Windows'
         shell: pwsh
+        timeout-minutes: 15
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/vcpkg-binary-cache
         run: |
+          $ErrorActionPreference = 'Stop'
           if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
             choco install ffmpeg --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw 'Chocolatey FFmpeg installation failed' }
           }
-          git -C "$env:VCPKG_INSTALLATION_ROOT" fetch origin 19780d9cdf84d0944cf9a318666703b89ab6629c --depth 1
-          git -C "$env:VCPKG_INSTALLATION_ROOT" checkout 19780d9cdf84d0944cf9a318666703b89ab6629c
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+          # The manifest pins the vcpkg baseline. Fetch only when the runner
+          # checkout differs; no repeated checkout of an already matching ref.
+          $baseline = '19780d9cdf84d0944cf9a318666703b89ab6629c'
+          $current = (git -C "$env:VCPKG_INSTALLATION_ROOT" rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect vcpkg HEAD' }
+          if ($current -ne $baseline) {
+            git -C "$env:VCPKG_INSTALLATION_ROOT" fetch origin $baseline --depth 1
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch pinned vcpkg baseline' }
+            git -C "$env:VCPKG_INSTALLATION_ROOT" -c advice.detachedHead=false checkout $baseline
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot checkout pinned vcpkg baseline' }
+          }
           & "$env:VCPKG_INSTALLATION_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg bootstrap failed' }
+
           cmake -S . -B build/cmake -A x64 `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows-static `
             '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows CMake configuration failed' }
       - name: Build
         run: cmake --build build/cmake --config ${{ matrix.build_type }} --parallel 2
       - name: CPU, audio and resource tests
