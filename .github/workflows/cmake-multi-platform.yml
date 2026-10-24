@@ -143,12 +143,12 @@ jobs:
       - name: Build
         run: cmake --build build/cmake --config ${{ matrix.build_type }} --parallel 2
       - name: CPU, audio and resource tests
-        run: ctest --test-dir build/cmake -C ${{ matrix.build_type }} -L unit --output-on-failure --output-junit build/cmake/unit.xml
+        run: ctest --test-dir build/cmake -C ${{ matrix.build_type }} -L unit --output-on-failure --output-junit unit.xml
       - name: Full OpenGL integration tests
         if: runner.os == 'Linux'
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure --output-junit build/cmake/runtime.xml
+        run: xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure --output-junit runtime.xml
       - name: Upload CTest JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
