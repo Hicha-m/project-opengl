@@ -160,6 +160,12 @@ if(BUILD_TESTING)
         set_tests_properties(export_mp4_python PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             LABELS unit TIMEOUT 120)
+        add_test(NAME ci_metrics_python
+            COMMAND "${Python3_EXECUTABLE}" -m unittest discover
+                -s "${CMAKE_CURRENT_SOURCE_DIR}/tests" -p "test_ci_metrics.py")
+        set_tests_properties(ci_metrics_python PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            LABELS unit TIMEOUT 30)
     endif()
 endif()
 
