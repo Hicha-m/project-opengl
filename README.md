@@ -10,26 +10,17 @@ meteor bombardment to a wide shot of the Solar System and the Milky Way.
 
 ![Space cinematic preview](image.gif)
 
-## Get started
+## Running the application
 
-Choose the distribution method that fits your use case:
+The project supports native desktop builds for **Linux, Windows and macOS**.
+For a ready-to-run build, see [GitHub Releases](https://github.com/Hicha-m/solar-system/releases)
+**after a versioned release has been published**. Native builds use the
+operating system's audio device; see [desktop packages](#desktop-support-and-downloadable-packages)
+and [build instructions](#requirements-for-building).
 
-| Goal | Method |
-| --- | --- |
-| Run the desktop application | [Download a release](https://github.com/Hicha-m/solar-system/releases) for your OS, when published |
-| Try a verified CI package | [GitHub Actions](https://github.com/Hicha-m/solar-system/actions) → a successful full build → `package-*` artifact (GitHub sign-in may be required) |
-| Build and test in a Linux container | [Docker instructions](#docker) |
-| Browse the current source without Git history | [Download source ZIP](https://github.com/Hicha-m/solar-system/archive/refs/heads/master.zip) |
-| Contribute from a smaller Git checkout | Shallow clone (below) |
-
-```bash
-git clone --depth 1 --single-branch --branch master https://github.com/Hicha-m/solar-system.git
-cd solar-system
-```
-
-This keeps the full commit history available on GitHub without downloading it for
-a new local checkout. To fetch the remaining history later, run `git fetch --unshallow`.
-The source archive and Git checkout contain **source code**, not prebuilt executables.
+For a reproducible Linux build and automated graphical tests, see [Docker](#docker).
+Docker desktop GUI/audio forwarding is Linux-specific and not a substitute for
+native Windows or macOS packages.
 
 ## Overview
 
@@ -84,19 +75,32 @@ The desktop targets are **Windows x64, macOS Apple Silicon / Intel, and Linux
 x64 / ARM64**. Each platform has its own executable; one binary cannot run on
 all operating systems. A graphics driver supporting OpenGL 3.3 is required.
 
-When a release is published, download the matching archive from
-[GitHub Releases](https://github.com/Hicha-m/solar-system/releases), or use the
-matching `package-*` artifact from a successful full-matrix run in
-[GitHub Actions](https://github.com/Hicha-m/solar-system/actions). Extract the
-complete archive, then launch `project.exe` on Windows, `project.app` on macOS,
-or `project` on Linux. Keep the resources and bundled libraries together.
-You can move the extracted directory and launch it from another working directory,
+Once a versioned release has been published, download the platform-specific
+archive from [GitHub Releases](https://github.com/Hicha-m/solar-system/releases).
+Extract the complete archive before launching the application. You can move
+the extracted directory and launch it from another working directory,
 including paths containing spaces and non-ASCII characters.
 
-Packages contain MP3 music and the short impact WAV. **FFmpeg is needed when building or exporting MP4**, but not for regular playback.
-SDL3 handles music and impact playback through the host's default audio device.
-The application reports unavailable audio and can continue without sound.
-Do not set `SDL_AUDIO_DRIVER=dummy` when you want audible playback.
+### Launch with sound
+
+Extract the entire platform-specific archive, keeping `build/music/`, the
+textures, models and shaders beside the executable (inside the macOS app bundle).
+The bundled MP3 music and impact WAV are included in the packages: **FFmpeg is
+not required for normal playback**.
+
+- **Windows 10/11 (x64):** launch `project.exe` from the extracted folder.
+  SDL3 uses the Windows audio output by default; check the system volume mixer
+  if music is muted.
+- **macOS (Apple Silicon or Intel):** extract the ZIP and open `project.app`.
+  On first launch macOS may require you to approve an unnotarized application in
+  **System Settings → Privacy & Security**. SDL3 uses the default macOS
+  audio output.
+- **Linux (x64/ARM64):** extract the tarball and launch `./project` from
+  the extracted directory in a graphical desktop session. SDL3 uses the
+  configured PulseAudio, PipeWire or ALSA audio backend.
+
+If no audio output is available the application can continue without sound.
+Do **not** set `SDL_AUDIO_DRIVER=dummy` for audible playback.
 
 macOS packages are ad-hoc signed, not Apple-notarized. Linux packages include
 SDL3, GLFW; system libraries and graphics drivers come from the host.
@@ -246,20 +250,20 @@ The options are command-line settings; there is no graphical export dialog.
 
 ## Docker
 
-Docker provides a reproducible Linux build and automated tests, not a
-cross-platform native desktop executable. Running its GUI requires access to
-a Linux X11/XWayland display (see below). Build the image from the project directory:
+The multi-stage Docker image builds SDL3 and the application, and runs CPU,
+audio-initialization and OpenGL tests under Xvfb. It is a **Linux container**,
+not a native Windows or macOS GUI application.
 
 ```bash
 docker build -t solar-system .
 ```
 
-The multi-stage build compiles SDL3 3.2.10 and the application, runs all CPU,
-audio and OpenGL tests under Xvfb, then keeps only the application, assets and
-runtime libraries in the final image.
+### Linux desktop (X11/XWayland) with audio
 
-To open the application on a Linux X11 desktop (including XWayland), pass the
-display socket and your X11 authorization file:
+A running X11/XWayland session and an existing Xauthority file are required.
+For audible music and impact sounds, the example below forwards the host's
+PulseAudio-compatible socket (also provided by PipeWire's PulseAudio service)
+rather than selecting SDL3's silent `dummy` driver:
 
 ```bash
 docker run --rm \
@@ -267,30 +271,40 @@ docker run --rm \
   -e DISPLAY \
   -e XAUTHORITY=/tmp/container.xauth \
   -e LIBGL_ALWAYS_SOFTWARE=1 \
-  -e SDL_AUDIO_DRIVER=dummy \
+  -e PULSE_SERVER=unix:/tmp/pulse/native \
   -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
   -v "${XAUTHORITY:-$HOME/.Xauthority}:/tmp/container.xauth:ro" \
+  -v "${XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse/native" \
   solar-system
 ```
 
-The Xauthority file must exist and authorize the current display. This command
-uses software rendering and silent audio; desktop audio/GPU forwarding depends
-on the host configuration. The native CMake build provides normal desktop audio.
-The container desktop launch is intended for Linux hosts.
+Make sure `$XDG_RUNTIME_DIR/pulse/native` exists and your host audio server
+authorizes connections from the container. Depending on the desktop, access
+to the X11 cookie or PulseAudio server may need adjustment. Software-rendered
+OpenGL can be much slower than native graphics; the native Linux package is
+recommended for interactive use. For silent CI smoke tests only, use
+`-e SDL_AUDIO_DRIVER=dummy` and omit the PulseAudio forwarding options.
 
+### Windows and macOS
 
+Docker Desktop does **not** transparently forward a Linux container's OpenGL
+desktop window and sound to Windows or macOS. The Docker image is suitable for
+building or CI validation on those hosts, but the documented GUI/audio launch
+is supported on **Linux X11/XWayland only**. For interactive playback with sound
+on Windows and macOS, run the native `project.exe` or `project.app` described
+above instead. An X server and a separate audio bridge would require
+host-specific setup and are not provided by this project.
 
-On default-branch pushes, CI is configured to publish a separate image to
-`ghcr.io/hicha-m/solar-system:latest` after the desktop checks and Docker build
-succeed. If the image is available, pull it instead of rebuilding locally:
+On default-branch pushes, CI is configured to publish the Linux image to
+`ghcr.io/hicha-m/solar-system:latest` after its checks pass. Once published,
+you can pull it instead of building locally:
 
 ```bash
 docker pull ghcr.io/hicha-m/solar-system:latest
 ```
 
-Replace `solar-system` with `ghcr.io/hicha-m/solar-system:latest` in the
-`docker run` command above to use that image. For a graphical desktop,
-native release packages are generally simpler than Docker.
+Use `ghcr.io/hicha-m/solar-system:latest` in place of `solar-system` in the
+Linux `docker run` command above.
 
 ## GitHub Actions (CI/CD)
 
@@ -308,12 +322,14 @@ pull requests, version-tag pushes (`1.0.0` or `v1.0.0`) and manual triggers:
   explicit headless OSMesa context. Normal macOS launches use Cocoa/OpenGL.
 - Windows CI uses a checksum-verified Mesa software renderer for its startup
   test; it is not included in the distributed application.
-- Verified Release packages are uploaded as downloadable artifacts.
+- Full-matrix builds verify the portable packages before they are released.
 - Docker builds only after the desktop checks succeed. Default-branch pushes
   also publish `ghcr.io/hicha-m/solar-system:latest` and `sha-<commit>`.
 - Version-tag pushes create a GitHub Release with generated release notes and
-  the five verified desktop packages, after all desktop and Docker checks pass.
-  Rerunning the workflow updates the existing release's package attachments.
+  the five verified desktop packages, **only after all desktop and Docker checks pass**.
+  No release appears until a version tag is pushed successfully; ordinary
+  `master` pushes publish a container but do **not** create GitHub Releases.
+  Rerunning a successful version-tag workflow updates the existing attachments.
 
 To publish a release, commit and push the workflow and project changes first,
 then tag that commit from the project directory:
