@@ -1,9 +1,35 @@
 # OpenGL Space Cinematic
 
+[![CI](https://github.com/Hicha-m/solar-system/actions/workflows/cmake-multi-platform.yml/badge.svg?branch=master)](https://github.com/Hicha-m/solar-system/actions/workflows/cmake-multi-platform.yml)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](CMakeLists.txt)
+[![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3%2B-5586a4)](README.md#requirements-for-building)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-555)](README.md#desktop-support-and-downloadable-packages)
+
 Real-time OpenGL project featuring a cinematic journey from an Earth under
 meteor bombardment to a wide shot of the Solar System and the Milky Way.
 
 ![Space cinematic preview](image.gif)
+
+## Get started
+
+Choose the distribution method that fits your use case:
+
+| Goal | Method |
+| --- | --- |
+| Run the desktop application | [Download a release](https://github.com/Hicha-m/solar-system/releases) for your OS, when published |
+| Try a verified CI package | [GitHub Actions](https://github.com/Hicha-m/solar-system/actions) → a successful full build → `package-*` artifact (GitHub sign-in may be required) |
+| Build and test in a Linux container | [Docker instructions](#docker) |
+| Browse the current source without Git history | [Download source ZIP](https://github.com/Hicha-m/solar-system/archive/refs/heads/master.zip) |
+| Contribute from a smaller Git checkout | Shallow clone (below) |
+
+```bash
+git clone --depth 1 --single-branch --branch master https://github.com/Hicha-m/solar-system.git
+cd solar-system
+```
+
+This keeps the full commit history available on GitHub without downloading it for
+a new local checkout. To fetch the remaining history later, run `git fetch --unshallow`.
+The source archive and Git checkout contain **source code**, not prebuilt executables.
 
 ## Overview
 
@@ -58,10 +84,10 @@ The desktop targets are **Windows x64, macOS Apple Silicon / Intel, and Linux
 x64 / ARM64**. Each platform has its own executable; one binary cannot run on
 all operating systems. A graphics driver supporting OpenGL 3.3 is required.
 
-Download the matching archive from
-[GitHub Releases](https://github.com/Hicha-m/project-opengl/releases), or the
-matching `package-*` artifact from a successful run in
-[GitHub Actions](https://github.com/Hicha-m/project-opengl/actions). Extract the
+When a release is published, download the matching archive from
+[GitHub Releases](https://github.com/Hicha-m/solar-system/releases), or use the
+matching `package-*` artifact from a successful full-matrix run in
+[GitHub Actions](https://github.com/Hicha-m/solar-system/actions). Extract the
 complete archive, then launch `project.exe` on Windows, `project.app` on macOS,
 or `project` on Linux. Keep the resources and bundled libraries together.
 You can move the extracted directory and launch it from another working directory,
@@ -220,10 +246,12 @@ The options are command-line settings; there is no graphical export dialog.
 
 ## Docker
 
-Build a Linux image from the project directory:
+Docker provides a reproducible Linux build and automated tests, not a
+cross-platform native desktop executable. Running its GUI requires access to
+a Linux X11/XWayland display (see below). Build the image from the project directory:
 
 ```bash
-docker build -t project-opengl .
+docker build -t solar-system .
 ```
 
 The multi-stage build compiles SDL3 3.2.10 and the application, runs all CPU,
@@ -242,13 +270,27 @@ docker run --rm \
   -e SDL_AUDIO_DRIVER=dummy \
   -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
   -v "${XAUTHORITY:-$HOME/.Xauthority}:/tmp/container.xauth:ro" \
-  project-opengl
+  solar-system
 ```
 
 The Xauthority file must exist and authorize the current display. This command
 uses software rendering and silent audio; desktop audio/GPU forwarding depends
 on the host configuration. The native CMake build provides normal desktop audio.
 The container desktop launch is intended for Linux hosts.
+
+
+
+On default-branch pushes, CI is configured to publish a separate image to
+`ghcr.io/hicha-m/solar-system:latest` after the desktop checks and Docker build
+succeed. If the image is available, pull it instead of rebuilding locally:
+
+```bash
+docker pull ghcr.io/hicha-m/solar-system:latest
+```
+
+Replace `solar-system` with `ghcr.io/hicha-m/solar-system:latest` in the
+`docker run` command above to use that image. For a graphical desktop,
+native release packages are generally simpler than Docker.
 
 ## GitHub Actions (CI/CD)
 
@@ -268,7 +310,7 @@ pull requests, version-tag pushes (`1.0.0` or `v1.0.0`) and manual triggers:
   test; it is not included in the distributed application.
 - Verified Release packages are uploaded as downloadable artifacts.
 - Docker builds only after the desktop checks succeed. Default-branch pushes
-  also publish `ghcr.io/hicha-m/project-opengl:latest` and `sha-<commit>`.
+  also publish `ghcr.io/hicha-m/solar-system:latest` and `sha-<commit>`.
 - Version-tag pushes create a GitHub Release with generated release notes and
   the five verified desktop packages, after all desktop and Docker checks pass.
   Rerunning the workflow updates the existing release's package attachments.
