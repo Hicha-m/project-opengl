@@ -34,48 +34,84 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {os: ubuntu-24.04, compiler: clang++, build_type: Debug}
-          - {os: ubuntu-24.04, compiler: clang++, build_type: Release}
-          - {os: ubuntu-24.04, compiler: g++, build_type: Release}
-          - {os: ubuntu-24.04-arm, compiler: g++, build_type: Release}
-          - {os: macos-14, compiler: clang++, build_type: Debug}
-          - {os: macos-14, compiler: clang++, build_type: Release}
-          - {os: macos-15-intel, compiler: clang++, build_type: Release}
-          - {os: windows-2022, compiler: MSVC, build_type: Debug}
-          - {os: windows-2022, compiler: MSVC, build_type: Release}
+        # PRs: representative compilers + real OpenGL/MP4 smoke on Linux.
+        # master, release tags and manual dispatch: complete 9-job portability matrix.
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Debug"},{"os":"ubuntu-24.04","compiler":"g++","build_type":"Release"},{"os":"macos-14","compiler":"clang++","build_type":"Release"},{"os":"windows-2022","compiler":"MSVC","build_type":"Release"}]' || '[{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Debug"},{"os":"ubuntu-24.04","compiler":"clang++","build_type":"Release"},{"os":"ubuntu-24.04","compiler":"g++","build_type":"Release"},{"os":"ubuntu-24.04-arm","compiler":"g++","build_type":"Release"},{"os":"macos-14","compiler":"clang++","build_type":"Debug"},{"os":"macos-14","compiler":"clang++","build_type":"Release"},{"os":"macos-15-intel","compiler":"clang++","build_type":"Release"},{"os":"windows-2022","compiler":"MSVC","build_type":"Debug"},{"os":"windows-2022","compiler":"MSVC","build_type":"Release"}]') }}
     steps:
       - uses: actions/checkout@v6
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
+        timeout-minutes: 12
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libgl1-mesa-dev libglfw3-dev libglm-dev ffmpeg xvfb xauth
+          set -euo pipefail
+          # Azure's Ubuntu mirror has repeatedly stalled on x86 CI runners.
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
+          packages=(libgl1-mesa-dev libglfw3-dev libglm-dev)
+          command -v ninja >/dev/null || packages+=(ninja-build)
+          command -v ffmpeg >/dev/null || packages+=(ffmpeg)
+          command -v Xvfb >/dev/null || packages+=(xvfb)
+          command -v xauth >/dev/null || packages+=(xauth)
+          missing=()
+          for package in "${packages[@]}"; do
+            if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then
+              missing+=("$package")
+            fi
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Installing required Ubuntu packages: %s\n' "${missing[*]}"
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends "${missing[@]}"
+          else
+            echo "Required Linux dependencies are already installed."
+          fi
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install ninja glfw glm ffmpeg bison flex
+        timeout-minutes: 12
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_CLEANUP: '1'
+        run: |
+          packages=(ninja glfw glm ffmpeg)
+          # bison/flex are used only when building the full release renderer.
+          if [[ "${{ github.event_name }}" != 'pull_request' ]]; then
+            packages+=(bison flex)
+          fi
+          missing=()
+          for package in "${packages[@]}"; do
+            brew list --versions "$package" >/dev/null 2>&1 || missing+=("$package")
+          done
+          if (( ${#missing[@]} )); then brew install "${missing[@]}"; fi
       - name: Restore macOS software renderer
-        if: runner.os == 'macOS'
+        if: (runner.os == 'macOS') && github.event_name != 'pull_request'
         id: osmesa
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/osmesa
           key: osmesa-${{ matrix.os }}-24.3.4-softpipe-v1
       - name: Build macOS software renderer
-        if: runner.os == 'macOS' && steps.osmesa.outputs.cache-hit != 'true'
+        if: (runner.os == 'macOS' && steps.osmesa.outputs.cache-hit != 'true') && github.event_name != 'pull_request'
         run: bash scripts/build_osmesa.sh "$RUNNER_TEMP/osmesa"
       - name: Cache macOS software renderer
-        if: runner.os == 'macOS' && steps.osmesa.outputs.cache-hit != 'true'
+        if: (runner.os == 'macOS' && steps.osmesa.outputs.cache-hit != 'true') && github.event_name != 'pull_request'
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/osmesa
           key: osmesa-${{ matrix.os }}-24.3.4-softpipe-v1
       - name: Install SDL3
         if: runner.os != 'Windows'
-        uses: libsdl-org/setup-sdl@main
+        timeout-minutes: 12
+        # setup-sdl has a built-in SDL cache. Avoid its huge Linux APT
+        # dependency installation on every cache hit.
+        uses: libsdl-org/setup-sdl@v1
         with:
           version: 3.2.10
-          install-linux-dependencies: true
+          build-type: Release
+          install-linux-dependencies: false
       - name: Configure Unix
         if: runner.os != 'Windows'
         run: >-
@@ -94,7 +130,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          choco install ffmpeg --no-progress -y
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --no-progress -y
+          }
           git -C "$env:VCPKG_INSTALLATION_ROOT" fetch origin 19780d9cdf84d0944cf9a318666703b89ab6629c --depth 1
           git -C "$env:VCPKG_INSTALLATION_ROOT" checkout 19780d9cdf84d0944cf9a318666703b89ab6629c
           & "$env:VCPKG_INSTALLATION_ROOT/bootstrap-vcpkg.bat" -disableMetrics
@@ -105,12 +143,22 @@ jobs:
       - name: Build
         run: cmake --build build/cmake --config ${{ matrix.build_type }} --parallel 2
       - name: CPU, audio and resource tests
-        run: ctest --test-dir build/cmake -C ${{ matrix.build_type }} -L unit --output-on-failure
+        run: ctest --test-dir build/cmake -C ${{ matrix.build_type }} -L unit --output-on-failure --output-junit build/cmake/unit.xml
       - name: Full OpenGL integration tests
         if: runner.os == 'Linux'
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure
+        run: xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure --output-junit build/cmake/runtime.xml
+      - name: Upload CTest JUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
+          path: |
+            build/cmake/unit.xml
+            build/cmake/runtime.xml
+          retention-days: 14
+          if-no-files-found: ignore
       # Only the existing Linux GCC Release job enables instrumentation and runs export.
       # All distributable Clang/macOS/Windows builds compile without instrumentation.
       # No extra runner or compile pass; Mesa/Xvfb and FFmpeg are already installed.
@@ -122,17 +170,18 @@ jobs:
           SDL_AUDIO_DRIVER: dummy
         run: xvfb-run -a python3 scripts/ci_export_profile.py
       - name: Create distributable package
+        if: github.event_name != 'pull_request'
         run: cpack --config build/cmake/CPackConfig.cmake -C ${{ matrix.build_type }} -B build/packages
       - name: Verify relocated Linux package
-        if: runner.os == 'Linux'
+        if: (runner.os == 'Linux') && github.event_name != 'pull_request'
         run: xvfb-run -a python3 scripts/verify_package.py build/packages
       - name: Verify relocated macOS package
-        if: runner.os == 'macOS'
+        if: (runner.os == 'macOS') && github.event_name != 'pull_request'
         env:
           DYLD_LIBRARY_PATH: ${{ runner.temp }}/osmesa/lib
         run: python3 scripts/verify_package.py build/packages --software-context
       - name: Install software OpenGL for Windows package test
-        if: runner.os == 'Windows'
+        if: (runner.os == 'Windows') && github.event_name != 'pull_request'
         shell: pwsh
         run: |
           $archive = Join-Path $env:RUNNER_TEMP mesa.7z
@@ -140,11 +189,11 @@ jobs:
           if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695') { throw 'Mesa checksum mismatch' }
           7z x $archive "-o$env:RUNNER_TEMP/mesa" -y
       - name: Verify relocated Windows package
-        if: runner.os == 'Windows'
+        if: (runner.os == 'Windows') && github.event_name != 'pull_request'
         shell: pwsh
         run: python scripts/verify_package.py build/packages --mesa "$env:RUNNER_TEMP/mesa/x64"
       - name: Upload verified package
-        if: (matrix.build_type == 'Release' && matrix.compiler != 'g++') || matrix.os == 'ubuntu-24.04-arm'
+        if: github.event_name != 'pull_request' && ((matrix.build_type == 'Release' && matrix.compiler != 'g++') || matrix.os == 'ubuntu-24.04-arm')
         uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.os }}
@@ -161,6 +210,8 @@ jobs:
 
   docker:
     name: Linux container
+    # Docker rebuilds C++ and runs its own tests: reserve it for master/tags.
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -227,3 +278,34 @@ jobs:
             gh release create "$RELEASE_TAG" "${packages[@]}" \
               --verify-tag --title "Release $RELEASE_TAG" --generate-notes
           fi
+
+  metrics:
+    name: CI metrics
+    if: always()
+    needs: [build, docker, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download CTest reports
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: ctest-*
+          path: build/test-reports
+      - name: Generate test and CI performance report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scripts/ci_metrics.py
+      - name: Upload machine-readable CI metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-metrics
+          path: ci-metrics.json
+          retention-days: 30
+          if-no-files-found: ignore
