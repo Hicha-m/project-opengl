@@ -145,7 +145,9 @@ jobs:
       - name: CPU, audio and resource tests
         run: ctest --test-dir build/cmake -C ${{ matrix.build_type }} -L unit --output-on-failure --output-junit unit.xml
       - name: Full OpenGL integration tests
-        if: runner.os == 'Linux'
+        # One real Linux OpenGL smoke per PR (GCC Release); repeat on every
+        # Linux target on master, tags and manual release verification.
+        if: runner.os == 'Linux' && (github.event_name != 'pull_request' || matrix.compiler == 'g++')
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: xvfb-run -a ctest --test-dir build/cmake -L runtime --output-on-failure --output-junit runtime.xml
